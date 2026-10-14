@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "game": "chess",
+  "motifs": [
+    {
+      "id": "23246e8c1e05f468",
+      "name": "material edge with activity tiebreak",
+      "description": "The side to move has more total piece value than the opponent, or with equal material attacks more enemy pieces than the opponent attacks.",
+      "source": "import chess\n\nMOTIF_NAME = 'material edge with activity tiebreak'\nMOTIF_DESCRIPTION = 'The side to move has more total piece value than the opponent, or with equal material attacks more enemy pieces than the opponent attacks.'\n\nPIECE_VALUES = {\n    chess.PAWN: 100,\n    chess.KNIGHT: 300,\n    chess.BISHOP: 300,\n    chess.ROOK: 500,\n    chess.QUEEN: 900,\n    chess.KING: 0,\n}\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    material = 0\n    for piece_type, value in PIECE_VALUES.items():\n        material += value * (len(board.pieces(piece_type, stm)) - len(board.pieces(piece_type, opp)))\n    if material != 0:\n        return material > 0\n    our_hits = 0\n    their_hits = 0\n    for sq in chess.SQUARES:\n        piece = board.piece_at(sq)\n        if piece is None:\n            continue\n        hits = 0\n        for target in board.attacks(sq):\n            victim = board.piece_at(target)\n            if victim is not None and victim.color != piece.color:\n                hits += 1\n        if piece.color == stm:\n            our_hits += hits\n        else:\n            their_hits += hits\n    return our_hits > their_hits",
+      "delta": 0.65221
+    },
+    {
+      "id": "68f2a00e222a446c",
+      "name": "healthier pawn structure",
+      "description": "The side to move has a clearly sounder pawn structure, with at least two fewer isolated, doubled, or backward pawns than the opponent.",
+      "source": "import chess\n\nMOTIF_NAME = 'healthier pawn structure'\nMOTIF_DESCRIPTION = 'The side to move has a clearly sounder pawn structure, with at least two fewer isolated, doubled, or backward pawns than the opponent.'\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n\n    def weaknesses(color):\n        pawns = list(board.pieces(chess.PAWN, color))\n        files = [0] * 8\n        for sq in pawns:\n            files[chess.square_file(sq)] += 1\n        d = 1 if color == chess.WHITE else -1\n        w = 0\n        for sq in pawns:\n            f = chess.square_file(sq)\n            r = chess.square_rank(sq)\n            if files[f] > 1:\n                w += 1\n            left = files[f - 1] if f > 0 else 0\n            right = files[f + 1] if f < 7 else 0\n            if left == 0 and right == 0:\n                w += 1\n                continue\n            adj = [chess.square_rank(q) for q in pawns\n                   if q != sq and abs(chess.square_file(q) - f) == 1]\n            if adj and all((qr - r) * d > 0 for qr in adj):\n                rs = r + d\n                rg = r + 2 * d\n                if 0 <= rs <= 7 and 0 <= rg <= 7:\n                    for gf in (f - 1, f + 1):\n                        if 0 <= gf <= 7:\n                            p = board.piece_at(chess.square(gf, rg))\n                            if p is not None and p.piece_type == chess.PAWN and p.color != color:\n                                w += 1\n                                break\n        return w\n\n    return weaknesses(not stm) >= weaknesses(stm) + 2",
+      "delta": 0.07238999999999998
+    },
+    {
+      "id": "2c09aa545e633ebe",
+      "name": "development lead on even terms",
+      "description": "With material roughly equal, the side to move has a clear development lead: at least two more units of development (minor pieces off their back rank plus a king tucked off the central file) than the opponent.",
+      "source": "MOTIF_NAME = 'development lead on even terms'\nMOTIF_DESCRIPTION = 'With material roughly equal, the side to move has a clear development lead: at least two more units of development (minor pieces off their back rank plus a king tucked off the central file) than the opponent.'\n\nVAL = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}\n\n\ndef _mat(board, color):\n    s = 0\n    for pt, v in VAL.items():\n        s += v * len(board.pieces(pt, color))\n    return s\n\n\ndef _dev(board, color):\n    back = 0 if color == chess.WHITE else 7\n    n = 0\n    for pt in (chess.KNIGHT, chess.BISHOP):\n        for sq in board.pieces(pt, color):\n            if chess.square_rank(sq) != back:\n                n += 1\n    ksq = board.king(color)\n    if ksq is not None and chess.square_rank(ksq) == back and chess.square_file(ksq) != 4:\n        n += 1\n    return n\n\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    if abs(_mat(board, stm) - _mat(board, opp)) > 1:\n        return False\n    return _dev(board, stm) - _dev(board, opp) >= 2",
+      "delta": 0.05809
+    },
+    {
+      "id": "c39eb5d4cf6829c1",
+      "name": "enemy-half pawn space edge",
+      "description": "The side to move's pawns attack at least three more distinct squares on the opponent's half of the board than the opponent's pawns attack on the side-to-move's half, reflecting a clear space advantage.",
+      "source": "import chess\n\nMOTIF_NAME = 'enemy-half pawn space edge'\nMOTIF_DESCRIPTION = \"The side to move's pawns attack at least three more distinct squares on the opponent's half of the board than the opponent's pawns attack on the side-to-move's half, reflecting a clear space advantage.\"\n\ndef _space(board, color):\n    half = 0xFFFFFFFF00000000 if color == chess.WHITE else 0x00000000FFFFFFFF\n    mask = 0\n    for sq in board.pieces(chess.PAWN, color):\n        mask |= int(board.attacks(sq))\n    return bin(mask & half).count('1')\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    return _space(board, stm) - _space(board, not stm) >= 3",
+      "delta": 0.029710000000000014
+    },
+    {
+      "id": "4528d203d9f9414e",
+      "name": "accumulated positional pluses score",
+      "description": "The side to move has at least three points of positional advantages such as the bishop pair, pinned enemy pieces, advanced passed pawns, rooks on open files, and the safer king.",
+      "source": "import chess\n\nMOTIF_NAME = 'accumulated positional pluses score'\nMOTIF_DESCRIPTION = 'The side to move has at least three points of positional advantages such as the bishop pair, pinned enemy pieces, advanced passed pawns, rooks on open files, and the safer king.'\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    score = 0\n    sb = len(board.pieces(chess.BISHOP, stm))\n    ob = len(board.pieces(chess.BISHOP, opp))\n    if sb >= 2 and ob < 2:\n        score += 2\n    elif ob >= 2 and sb < 2:\n        score -= 2\n    pi = 0\n    ps = 0\n    for sq, piece in board.piece_map().items():\n        if piece.piece_type in (chess.PAWN, chess.KING):\n            continue\n        if board.is_pinned(piece.color, sq):\n            if piece.color == opp:\n                pi += 1\n            else:\n                ps += 1\n    score += min(pi, 2) - min(ps, 2)\n    pawns = {stm: list(board.pieces(chess.PAWN, stm)), opp: list(board.pieces(chess.PAWN, opp))}\n    fc = {stm: [0] * 8, opp: [0] * 8}\n    for c in (stm, opp):\n        for sq in pawns[c]:\n            fc[c][chess.square_file(sq)] += 1\n    def passed(c, sq):\n        f = chess.square_file(sq)\n        r = chess.square_rank(sq)\n        for e in pawns[not c]:\n            if abs(chess.square_file(e) - f) <= 1:\n                er = chess.square_rank(e)\n                if (c == chess.WHITE and er > r) or (c == chess.BLACK and er < r):\n                    return False\n        return True\n    def prog(c, sq):\n        r = chess.square_rank(sq)\n        return r - 1 if c == chess.WHITE else 6 - r\n    pp = {c: sum(prog(c, s) for s in pawns[c] if passed(c, s) and prog(c, s) >= 2) for c in (stm, opp)}\n    d = pp[stm] - pp[opp]\n    if d >= 4:\n        score += 2\n    elif d >= 2:\n        score += 1\n    elif d <= -4:\n        score -= 2\n    elif d <= -2:\n        score -= 1\n    dbl = fc[opp].count(0)\n    dbl_s = sum(1 for f in range(8) if fc[stm][f] >= 2)\n    dbl_o = sum(1 for f in range(8) if fc[opp][f] >= 2)\n    score += max(-2, min(2, dbl_o - dbl_s))\n    rd = 0\n    for c, sign in ((stm, 1), (opp, -1)):\n        for s in board.pieces(chess.ROOK, c):\n            f = chess.square_file(s)\n            if fc[stm][f] == 0 and fc[opp][f] == 0:\n                rd += sign\n            elif fc[c][f] == 0:\n                rd += sign\n    score += max(-2, min(2, rd))\n    queens = len(board.pieces(chess.QUEEN, chess.WHITE)) + len(board.pieces(chess.QUEEN, chess.BLACK))\n    ks = board.king(stm)\n    ko = board.king(opp)\n    if queens and ks is not None and ko is not None:\n        kfc = 3 <= chess.square_file(ks) <= 4\n        kfo = 3 <= chess.square_file(ko) <= 4\n        if kfo and not kfc:\n            score += 2\n        elif kfc and not kfo:\n            score -= 2\n    return score >= 3",
+      "delta": 0.028500000000000004
+    },
+    {
+      "id": "1d4e2c53b98d04de",
+      "name": "bishop pair advantage",
+      "description": "The side to move owns the bishop pair (two or more bishops) while the opponent has at most one bishop, a lasting positional edge.",
+      "source": "import chess\n\nMOTIF_NAME = 'bishop pair advantage'\nMOTIF_DESCRIPTION = 'The side to move owns the bishop pair (two or more bishops) while the opponent has at most one bishop, a lasting positional edge.'\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    mine = len(board.pieces(chess.BISHOP, stm))\n    theirs = len(board.pieces(chess.BISHOP, opp))\n    return mine >= 2 and theirs < 2",
+      "delta": 0.026099999999999984
+    },
+    {
+      "id": "a8ebab538f5d478e",
+      "name": "check based double attack",
+      "description": "With material not already favorable, the side to move has mate in one or a checking move that also leaves an enemy non-pawn piece with more attackers than defenders.",
+      "source": "MOTIF_NAME = 'check based double attack'\nMOTIF_DESCRIPTION = 'With material not already favorable, the side to move has mate in one or a checking move that also leaves an enemy non-pawn piece with more attackers than defenders.'\nimport chess\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    values = (0, 100, 300, 300, 500, 900, 0)\n    own = sum(values[p.piece_type] for p in board.piece_map().values() if p.color == stm)\n    their = sum(values[p.piece_type] for p in board.piece_map().values() if p.color == opp)\n    if own - their > 200:\n        return False\n    skipped = (chess.PAWN, chess.KING)\n    for move in board.legal_moves:\n        if not board.gives_check(move):\n            continue\n        board.push(move)\n        if board.is_checkmate():\n            board.pop()\n            return True\n        hit = False\n        for sq, piece in board.piece_map().items():\n            if piece.color != opp or piece.piece_type in skipped:\n                continue\n            attackers = board.attackers(stm, sq)\n            if attackers and len(attackers) > len(board.attackers(opp, sq)):\n                hit = True\n                break\n        board.pop()\n        if hit:\n            return True\n    return False",
+      "delta": 0.020000000000000004
+    },
+    {
+      "id": "461930b59440fbaf",
+      "name": "activity compensation without material edge",
+      "description": "With equal or less material, the side to move controls many more squares than the opponent, showing superior piece activity.",
+      "source": "import chess\n\nMOTIF_NAME = 'activity compensation without material edge'\nMOTIF_DESCRIPTION = 'With equal or less material, the side to move controls many more squares than the opponent, showing superior piece activity.'\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    val = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3,\n           chess.ROOK: 5, chess.QUEEN: 9}\n    mat = sum(v * (len(board.pieces(pt, stm)) - len(board.pieces(pt, opp)))\n              for pt, v in val.items())\n    if mat > 0:\n        return False\n    ours = set()\n    theirs = set()\n    for sq, piece in board.piece_map().items():\n        if piece.color == stm:\n            ours.update(board.attacks(sq))\n        else:\n            theirs.update(board.attacks(sq))\n    return len(ours) - len(theirs) >= 8",
+      "delta": 0.018009999999999998
+    },
+    {
+      "id": "431cf76ab6a943d5",
+      "name": "enemy king stranded in center",
+      "description": "With queens still on the board, the opponent king is stranded on a central file without safe castling escape while the side to move has its own king tucked away on a flank.",
+      "source": "import chess\n\nMOTIF_NAME = 'enemy king stranded in center'\nMOTIF_DESCRIPTION = 'With queens still on the board, the opponent king is stranded on a central file without safe castling escape while the side to move has its own king tucked away on a flank.'\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    if not board.pieces(chess.QUEEN, stm) and not board.pieces(chess.QUEEN, opp):\n        return False\n    ok = board.king(opp)\n    okf = chess.square_file(ok)\n    okr = chess.square_rank(ok)\n    back_rank = 7 if opp else 0\n    if okf in (3, 4):\n        central = True\n    elif okf in (2, 5):\n        central = not (okf == 2 and okr == back_rank) and not board.has_castling_rights(opp)\n    else:\n        central = False\n    if not central:\n        return False\n    skf = chess.square_file(board.king(stm))\n    return skf <= 2 or skf >= 5",
+      "delta": 0.012819999999999984
+    },
+    {
+      "id": "94ea6888604ff452",
+      "name": "king ring siege edge",
+      "description": "The side to move has at least three pieces attacking squares adjacent to the enemy king, at least two more than the opponent has around the side-to-move king.",
+      "source": "import chess\n\nMOTIF_NAME = 'king ring siege edge'\nMOTIF_DESCRIPTION = 'The side to move has at least three pieces attacking squares adjacent to the enemy king, at least two more than the opponent has around the side-to-move king.'\n\ndef _ring_count(board, color):\n    ksq = board.king(not color)\n    if ksq is None:\n        return 0\n    f0 = chess.square_file(ksq)\n    r0 = chess.square_rank(ksq)\n    pieces = set()\n    for df in (-1, 0, 1):\n        for dr in (-1, 0, 1):\n            if df == 0 and dr == 0:\n                continue\n            nf = f0 + df\n            nr = r0 + dr\n            if 0 <= nf < 8 and 0 <= nr < 8:\n                for a in board.attackers(color, chess.square(nf, nr)):\n                    pieces.add(a)\n    return len(pieces)\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    mine = _ring_count(board, stm)\n    if mine < 3:\n        return False\n    return mine - _ring_count(board, not stm) >= 2",
+      "delta": 0.01108
+    },
+    {
+      "id": "731be9ef6e28ad64",
+      "name": "tactical pressure on loose enemy pieces",
+      "description": "With material nearly even, the side to move creates more tactical pressure, in the form of enemy non-pawn pieces that are en prise, underdefended, or attacked by pawns, than it suffers on its own pieces.",
+      "source": "MOTIF_NAME = 'tactical pressure on loose enemy pieces'\nMOTIF_DESCRIPTION = 'With material nearly even, the side to move creates more tactical pressure, in the form of enemy non-pawn pieces that are en prise, underdefended, or attacked by pawns, than it suffers on its own pieces.'\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    val = (0, 1, 3, 3, 5, 9, 0)\n    ms = mo = 0\n    for p in board.piece_map().values():\n        if p.color == stm:\n            ms += val[p.piece_type]\n        else:\n            mo += val[p.piece_type]\n    d = ms - mo\n    if d > 1 or d < -2:\n        return False\n    net = 0\n    for sq, p in board.piece_map().items():\n        pt = p.piece_type\n        if pt == chess.PAWN or pt == chess.KING:\n            continue\n        sa = board.attackers(stm, sq)\n        oa = board.attackers(opp, sq)\n        nsa = len(sa)\n        noa = len(oa)\n        if p.color == opp:\n            if nsa:\n                if not noa:\n                    net += 2\n                elif nsa > noa:\n                    net += 1\n                for a in sa:\n                    if board.piece_type_at(a) == chess.PAWN:\n                        net += 1\n                        break\n        else:\n            if noa:\n                if not nsa:\n                    net -= 2\n                elif noa > nsa:\n                    net -= 1\n                for a in oa:\n                    if board.piece_type_at(a) == chess.PAWN:\n                        net -= 1\n                        break\n    return net >= 2",
+      "delta": 0.010690000000000002
+    }
+  ],
+  "metadata": {
+    "library_id": "chess/kimi-k3",
+    "model": "Kimi K3",
+    "run_id": "kimi3-chess-bp-fresh-20260921",
+    "motif_count": 11,
+    "reasoning_profile": "max_64k_total",
+    "successful_iterations": 100,
+    "dataset": {
+      "id": "basis_stm_winning125to250_losing125to250_balanced_exact200k_stockfish18d12_20260625_v1",
+      "sha256": "6bedf361f6189bcbeafab33fc38ab45cde0c5fbfb8a82e04beb8070c4ab972fa",
+      "position_count": 200000,
+      "winning_count": 100000,
+      "losing_count": 100000,
+      "engine": "Stockfish 18",
+      "engine_depth": 12,
+      "winning_cp_stm": [
+        125,
+        250
+      ],
+      "losing_cp_stm": [
+        -250,
+        -125
+      ]
+    },
+    "score_definition": "P(motif=True | winning) - P(motif=True | losing), measured on the discovery training dataset.",
+    "manifest_sha256": "1f712f9355b9c211895b9cbc5cd86cf36229a7bec4962580f5ab0d9ed9d2010b",
+    "model_id": "moonshotai/Kimi-K3",
+    "source_commit": "26dc9e6bbf5e99f7205c78d79391da948016ca88",
+    "config_sha256": "dfc8f9b4386a1d496acba3f0b4a620904a311c5415bdc78bb6551b0dd13dda84",
+    "basis_directory": "basis_final",
+    "frozen_date": "2026-09-21",
+    "canonical_selection": "Canonical paper Kimi run; supersedes earlier Kimi snapshots.",
+    "motif_provenance": {
+      "23246e8c1e05f468": {
+        "source_sha256": "23246e8c1e05f468e3a7ffdc6ffe7f79516823545428e36bbb96532a61618028",
+        "rank": 1,
+        "discovery_index": 0,
+        "winning_true": 76362,
+        "losing_true": 11141,
+        "p_true_winning": 0.76362,
+        "p_true_losing": 0.11141
+      },
+      "68f2a00e222a446c": {
+        "source_sha256": "68f2a00e222a446c44b79a74012bb66be708fc798dd134a596d684719587959f",
+        "rank": 2,
+        "discovery_index": 2,
+        "winning_true": 23706,
+        "losing_true": 16467,
+        "p_true_winning": 0.23706,
+        "p_true_losing": 0.16467
+      },
+      "2c09aa545e633ebe": {
+        "source_sha256": "2c09aa545e633ebecc19917b7831ebaef4d957052a6c0ea78c5dda5c5cc173de",
+        "rank": 3,
+        "discovery_index": 8,
+        "winning_true": 8226,
+        "losing_true": 2417,
+        "p_true_winning": 0.08226,
+        "p_true_losing": 0.02417
+      },
+      "c39eb5d4cf6829c1": {
+        "source_sha256": "c39eb5d4cf6829c11b01bd76614f500e8f093433e8eb70204d34446b2c561860",
+        "rank": 4,
+        "discovery_index": 7,
+        "winning_true": 14383,
+        "losing_true": 11412,
+        "p_true_winning": 0.14383,
+        "p_true_losing": 0.11412
+      },
+      "4528d203d9f9414e": {
+        "source_sha256": "4528d203d9f9414ee254c9357c7c7c4fd9bb37956e0ed20ca6e608d74f1b9116",
+        "rank": 5,
+        "discovery_index": 1,
+        "winning_true": 8414,
+        "losing_true": 5564,
+        "p_true_winning": 0.08414,
+        "p_true_losing": 0.05564
+      },
+      "1d4e2c53b98d04de": {
+        "source_sha256": "1d4e2c53b98d04de54410972970c57844d687e6743f87f27b410f038b08f9f4e",
+        "rank": 6,
+        "discovery_index": 5,
+        "winning_true": 17758,
+        "losing_true": 15148,
+        "p_true_winning": 0.17758,
+        "p_true_losing": 0.15148
+      },
+      "a8ebab538f5d478e": {
+        "source_sha256": "a8ebab538f5d478e52516d45ddbe818f5514c11c0cd9b855808376f92068b73a",
+        "rank": 7,
+        "discovery_index": 10,
+        "winning_true": 12249,
+        "losing_true": 10249,
+        "p_true_winning": 0.12249,
+        "p_true_losing": 0.10249
+      },
+      "461930b59440fbaf": {
+        "source_sha256": "461930b59440fbaf9f322960afed1976743f4d64b7fecb5f4fd181845ee1f3ae",
+        "rank": 8,
+        "discovery_index": 3,
+        "winning_true": 4863,
+        "losing_true": 3062,
+        "p_true_winning": 0.04863,
+        "p_true_losing": 0.03062
+      },
+      "431cf76ab6a943d5": {
+        "source_sha256": "431cf76ab6a943d51674ced7d4c0cffbad553300406e35781fd2c0ebb04a62d0",
+        "rank": 9,
+        "discovery_index": 4,
+        "winning_true": 13673,
+        "losing_true": 12391,
+        "p_true_winning": 0.13673,
+        "p_true_losing": 0.12391
+      },
+      "94ea6888604ff452": {
+        "source_sha256": "94ea6888604ff4525af935386f2a1882d54273267d89cd679f190e3b504085b0",
+        "rank": 10,
+        "discovery_index": 6,
+        "winning_true": 2123,
+        "losing_true": 1015,
+        "p_true_winning": 0.02123,
+        "p_true_losing": 0.01015
+      },
+      "731be9ef6e28ad64": {
+        "source_sha256": "731be9ef6e28ad64ad01d327ab080c2645a956f32b1f923648ccfcb9015dc805",
+        "rank": 11,
+        "discovery_index": 9,
+        "winning_true": 2236,
+        "losing_true": 1167,
+        "p_true_winning": 0.02236,
+        "p_true_losing": 0.01167
+      }
+    }
+  }
+}

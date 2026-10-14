@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this code, please cite our paper listed below."
+type: software
+title: "BinProp for Chess and Go"
+authors:
+  - family-names: Press
+    given-names: Ori
+  - family-names: Golubev
+    given-names: Alexander
+version: 0.1.0
+license: MIT
+preferred-citation:
+  type: generic
+  title: "Explaining Chess and Go in Natural Language"
+  authors:
+    - family-names: Press
+      given-names: Ori
+    - family-names: Golubev
+      given-names: Alexander
+  year: 2026
+  notes: "Preprint"

@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "game": "go",
+  "motifs": [
+    {
+      "id": "b6761e384f8a0780",
+      "name": "opponent_cramped_interior_group",
+      "description": "The evaluated side has a large interior opponent group with very few liberties surrounded by the evaluated side’s stones, indicating the opponent is trapped and dying.",
+      "source": "MOTIF_NAME = 'opponent_cramped_interior_group'\nMOTIF_DESCRIPTION = 'The evaluated side has a large interior opponent group with very few liberties surrounded by the evaluated side’s stones, indicating the opponent is trapped and dying.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    rows = 19\n    cols = 19\n\n    def neighbors4(r, c):\n        for dr, dc in [(0,1),(1,0),(0,-1),(-1,0)]:\n            nr, nc = r + dr, c + dc\n            if 0 <= nr < rows and 0 <= nc < cols:\n                yield nr, nc\n\n    # Quick stone counts\n    our_stones = 0\n    opp_stones = 0\n    for row in board_rows:\n        for s in row:\n            if s == color:\n                our_stones += 1\n            elif s == opp:\n                opp_stones += 1\n    if our_stones < 10 or opp_stones < 8:\n        return False\n\n    # Find opponent groups restricted to interior (rows 1..17, cols 1..17)\n    visited = [[False]*cols for _ in range(rows)]\n    max_opp_interior_size = 0\n    min_opp_interior_libs = 999\n    interior_opp_total = 0\n\n    for r in range(1, 18):\n        for c in range(1, 18):\n            if board_rows[r][c] == opp and not visited[r][c]:\n                stack = [(r,c)]\n                visited[r][c] = True\n                stones = 0\n                libs = set()\n                while stack:\n                    cr, cc = stack.pop()\n                    stones += 1\n                    for nr, nc in neighbors4(cr, cc):\n                        cell = board_rows[nr][nc]\n                        if cell == '.':\n                            libs.add((nr,nc))\n                        elif cell == opp and not visited[nr][nc]:\n                            visited[nr][nc] = True\n                            stack.append((nr,nc))\n                interior_opp_total += stones\n                if stones > max_opp_interior_size:\n                    max_opp_interior_size = stones\n                if len(libs) < min_opp_interior_libs:\n                    min_opp_interior_libs = len(libs)\n\n    # Need a meaty interior opponent group\n    if max_opp_interior_size < 6:\n        return False\n\n    # Opponent interior groups must be cramped (few liberties)\n    if min_opp_interior_libs > 2:\n        return False\n\n    # Count our stones adjacent to empty points that are inside opponent's interior area\n    # Our stones on 3rd/4th line (influence) should be numerous\n    our_influence = 0\n    for r in range(rows):\n        for c in range(cols):\n            if board_rows[r][c] == color:\n                dist = min(r, rows-1-r, c, cols-1-c)\n                if 2 <= dist <= 3:\n                    our_influence += 1\n\n    if our_influence < 6:\n        return False\n\n    # The evaluated side should have more stones overall\n    if our_stones < opp_stones:\n        return False\n\n    # Final check: the opponent's interior stones are a large fraction of their total\n    if interior_opp_total < opp_stones * 0.4:\n        return False\n\n    return True",
+      "delta": 0.06106
+    },
+    {
+      "id": "d9c0fbdfe129053f",
+      "name": "our_safe_3plus_liberty_groups_vs_opponent_single_liberty_dead",
+      "description": "The evaluated side has at least 6 groups with 3 or more liberties (safe), while the opponent has at least 2 groups with exactly 1 liberty (dead), indicating a large life-and-death imbalance favoring the evaluated side.",
+      "source": "MOTIF_NAME = 'our_safe_3plus_liberty_groups_vs_opponent_single_liberty_dead'\nMOTIF_DESCRIPTION = 'The evaluated side has at least 6 groups with 3 or more liberties (safe), while the opponent has at least 2 groups with exactly 1 liberty (dead), indicating a large life-and-death imbalance favoring the evaluated side.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    rows = 19\n    cols = 19\n    DIRS = [(0,1),(1,0),(0,-1),(-1,0)]\n\n    def neighbors4(r, c):\n        for dr, dc in DIRS:\n            nr, nc = r + dr, c + dc\n            if 0 <= nr < rows and 0 <= nc < cols:\n                yield nr, nc\n\n    our_total = sum(1 for row in board_rows for s in row if s == color)\n    opp_total = sum(1 for row in board_rows for s in row if s == opp)\n    if our_total < 12 or opp_total < 6:\n        return False\n\n    visited = [[False]*cols for _ in range(rows)]\n    our_safe = 0\n    opp_dead = 0\n\n    for r in range(rows):\n        for c in range(cols):\n            stone = board_rows[r][c]\n            if stone in (color, opp) and not visited[r][c]:\n                stack = [(r,c)]\n                visited[r][c] = True\n                cells = []\n                libs = set()\n                while stack:\n                    cr, cc = stack.pop()\n                    cells.append((cr,cc))\n                    for nr, nc in neighbors4(cr, cc):\n                        cell = board_rows[nr][nc]\n                        if cell == stone and not visited[nr][nc]:\n                            visited[nr][nc] = True\n                            stack.append((nr,nc))\n                        elif cell == '.':\n                            libs.add((nr,nc))\n                if stone == color:\n                    if len(libs) >= 3:\n                        our_safe += 1\n                else:\n                    if len(libs) == 1:\n                        opp_dead += 1\n\n    return our_safe >= 6 and opp_dead >= 2",
+      "delta": 0.05335000000000001
+    },
+    {
+      "id": "930fc19e9395a46d",
+      "name": "third_fourth_line_dominance",
+      "description": "The evaluated side has many more stones on the 3rd and 4th lines from the edge than on the 1st and 2nd lines, indicating strong outward influence and territory potential.",
+      "source": "MOTIF_NAME = 'third_fourth_line_dominance'\nMOTIF_DESCRIPTION = 'The evaluated side has many more stones on the 3rd and 4th lines from the edge than on the 1st and 2nd lines, indicating strong outward influence and territory potential.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    rows = 19\n    cols = 19\n\n    # Count stones by distance from nearest edge\n    our_stones = 0\n    opp_stones = 0\n    our_3_4 = 0  # 3rd and 4th line\n    our_1_2 = 0  # 1st and 2nd line\n    opp_3_4 = 0\n    opp_1_2 = 0\n    \n    for r in range(rows):\n        for c in range(cols):\n            s = board_rows[r][c]\n            if s == '.':\n                continue\n            # Manhattan distance to nearest edge\n            dist = min(r, rows-1-r, c, cols-1-c)\n            if s == color:\n                our_stones += 1\n                if dist == 2 or dist == 3:\n                    our_3_4 += 1\n                elif dist == 0 or dist == 1:\n                    our_1_2 += 1\n            else:\n                opp_stones += 1\n                if dist == 2 or dist == 3:\n                    opp_3_4 += 1\n                elif dist == 0 or dist == 1:\n                    opp_1_2 += 1\n\n    if our_stones < 12 or opp_stones < 8:\n        return False\n\n    # Winning side has good 3rd/4th line presence and not too many 1st/2nd line stones\n    if our_3_4 < 8:\n        return False\n    if our_1_2 > our_3_4 * 0.7:\n        return False\n\n    # We should dominate 3rd/4th line relative to opponent\n    if our_3_4 < opp_3_4 + 3:\n        return False\n\n    # Opponent shouldn't dominate us on 3rd/4th\n    if opp_3_4 > our_3_4:\n        return False\n\n    # Our 3rd/4th vs opponent's 1st/2nd ratio should be good\n    return our_3_4 >= opp_1_2 + 5",
+      "delta": 0.03752999999999995
+    },
+    {
+      "id": "dd685d8376b55834",
+      "name": "our_anchored_groups_vs_opponent_floating",
+      "description": "The evaluated side has at least 4 groups with 3+ liberties touching lines 1-3 (anchored), while opponent has at least 2 central groups (no stone below row 3 or above row 15) with at most 2 liberties, indicating territorial security against weak floating opponent.",
+      "source": "MOTIF_NAME = 'our_anchored_groups_vs_opponent_floating'\nMOTIF_DESCRIPTION = 'The evaluated side has at least 4 groups with 3+ liberties touching lines 1-3 (anchored), while opponent has at least 2 central groups (no stone below row 3 or above row 15) with at most 2 liberties, indicating territorial security against weak floating opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    rows = 19\n    cols = 19\n\n    def neighbors4(r, c):\n        for dr, dc in [(0,1),(1,0),(0,-1),(-1,0)]:\n            nr, nc = r + dr, c + dc\n            if 0 <= nr < rows and 0 <= nc < cols:\n                yield nr, nc\n\n    our_total = sum(1 for row in board_rows for s in row if s == color)\n    opp_total = sum(1 for row in board_rows for s in row if s == opp)\n    if our_total < 10 or opp_total < 6:\n        return False\n\n    visited = [[False]*cols for _ in range(rows)]\n    our_anchored = 0\n    opp_floating_weak = 0\n\n    for r in range(rows):\n        for c in range(cols):\n            stone = board_rows[r][c]\n            if stone in (color, opp) and not visited[r][c]:\n                stack = [(r,c)]\n                visited[r][c] = True\n                cells = []\n                libs = set()\n                while stack:\n                    cr, cc = stack.pop()\n                    cells.append((cr,cc))\n                    for nr, nc in neighbors4(cr, cc):\n                        cell = board_rows[nr][nc]\n                        if cell == stone and not visited[nr][nc]:\n                            visited[nr][nc] = True\n                            stack.append((nr,nc))\n                        elif cell == '.':\n                            libs.add((nr,nc))\n                if stone == color:\n                    if len(libs) >= 3:\n                        touches_low = any(gr <= 2 or gr >= 16 or gc <= 2 or gc >= 16 for (gr, gc) in cells)\n                        if touches_low and len(cells) >= 3:\n                            our_anchored += 1\n                else:\n                    if len(libs) <= 2:\n                        is_central = all(3 <= gr <= 15 and 3 <= gc <= 15 for (gr, gc) in cells)\n                        if is_central and len(cells) >= 2:\n                            opp_floating_weak += 1\n\n    return our_anchored >= 4 and opp_floating_weak >= 2",
+      "delta": 0.017310000000000006
+    },
+    {
+      "id": "946f019f3eff70af",
+      "name": "our_large_stable_groups_vs_opponent_small_weak_groups",
+      "description": "The evaluated side has at least one group of 10+ stones with 5+ liberties (large and stable), while the opponent has at least 3 groups of 2-5 stones with at most 2 liberties (small and weak), indicating a strong territorial foundation against crumbling opposition.",
+      "source": "MOTIF_NAME = 'our_large_stable_groups_vs_opponent_small_weak_groups'\nMOTIF_DESCRIPTION = 'The evaluated side has at least one group of 10+ stones with 5+ liberties (large and stable), while the opponent has at least 3 groups of 2-5 stones with at most 2 liberties (small and weak), indicating a strong territorial foundation against crumbling opposition.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    rows = 19\n    cols = 19\n    DIRS = [(0,1),(1,0),(0,-1),(-1,0)]\n\n    def neighbors4(r, c):\n        for dr, dc in DIRS:\n            nr, nc = r + dr, c + dc\n            if 0 <= nr < rows and 0 <= nc < cols:\n                yield nr, nc\n\n    our_total = sum(1 for row in board_rows for s in row if s == color)\n    opp_total = sum(1 for row in board_rows for s in row if s == opp)\n    if our_total < 15 or opp_total < 10:\n        return False\n\n    visited = [[False]*cols for _ in range(rows)]\n    has_large_stable = False\n    opp_small_weak = 0\n\n    for r in range(rows):\n        for c in range(cols):\n            stone = board_rows[r][c]\n            if stone in (color, opp) and not visited[r][c]:\n                stack = [(r,c)]\n                visited[r][c] = True\n                cells = []\n                libs = set()\n                while stack:\n                    cr, cc = stack.pop()\n                    cells.append((cr,cc))\n                    for nr, nc in neighbors4(cr, cc):\n                        cell = board_rows[nr][nc]\n                        if cell == stone and not visited[nr][nc]:\n                            visited[nr][nc] = True\n                            stack.append((nr,nc))\n                        elif cell == '.':\n                            libs.add((nr,nc))\n                sz = len(cells)\n                lc = len(libs)\n                if stone == color:\n                    if sz >= 10 and lc >= 5:\n                        has_large_stable = True\n                else:\n                    if 2 <= sz <= 5 and lc <= 2:\n                        opp_small_weak += 1\n\n    return has_large_stable and opp_small_weak >= 3",
+      "delta": 0.010139999999999996
+    }
+  ],
+  "metadata": {
+    "library_id": "go/deepseek-v4-pro",
+    "model": "DeepSeek-V4-Pro",
+    "run_id": "basis_api_runs/tokenfactory_go_bp_max64k_100it_c070_20260721_102438/go/deepseekv4/run",
+    "motif_count": 5,
+    "score_definition": "P(motif=True | winning) - P(motif=True | losing), preserved from the canonical discovery ranking.",
+    "archive": "reports/go/appendix_examples/provenance/basis_sources.jsonl.gz",
+    "archive_sha256": "3578cc235b87ca4b08479b4ec87d3b6fae847e1bbdb3b1d8c7acb3c6c870342b",
+    "ranking_sha256": "968c36a4b377b2665d2d08772ec5ba6ca9d28d380a34a789145f86b7445e0853",
+    "source_commit": "bad3bd15b867f8c12517d087132fb8187d7e5c08",
+    "motif_provenance": {
+      "b6761e384f8a0780": {
+        "source_sha256": "b6761e384f8a07807cff55fd7dc814033bb36a3adc3b1a6e477b99a95167bbc2",
+        "rank": 1,
+        "discovery_index": 1,
+        "p_true_winning": 0.40984,
+        "p_true_losing": 0.34878
+      },
+      "d9c0fbdfe129053f": {
+        "source_sha256": "d9c0fbdfe129053fbf63e436788aa0f25628b366440ab0bff608e9b58fe285e3",
+        "rank": 2,
+        "discovery_index": 3,
+        "p_true_winning": 0.37373,
+        "p_true_losing": 0.32038
+      },
+      "930fc19e9395a46d": {
+        "source_sha256": "930fc19e9395a46ddb56b02e92d6fae90b01137b7e56cffd3a8c2f01e208fc63",
+        "rank": 3,
+        "discovery_index": 0,
+        "p_true_winning": 0.28783,
+        "p_true_losing": 0.2503
+      },
+      "dd685d8376b55834": {
+        "source_sha256": "dd685d8376b5583482f4c7d16bec971eea4d0c0c787767a10a5f742060969c07",
+        "rank": 4,
+        "discovery_index": 2,
+        "p_true_winning": 0.10677,
+        "p_true_losing": 0.08946
+      },
+      "946f019f3eff70af": {
+        "source_sha256": "946f019f3eff70afd7863dfd3691d441a38e63025ccf96abb5a68acfd573ee68",
+        "rank": 5,
+        "discovery_index": 4,
+        "p_true_winning": 0.07156,
+        "p_true_losing": 0.06142
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+Do not run commands or use tools. Answer only from the Go boards in this prompt.
+You are given 4 positive Go boards and 4 negative Go boards.
+Boards are 19 rows of 19 characters: . empty, B black stone, W white stone.
+The evaluated side is {{color}}.
+Write exactly 3 separate Python functions: explain_1(board, color), explain_2(board, color), explain_3(board, color).
+Each function should describe one robust Go motif: True on positive boards and False on negative boards.
+Prefer general Go structure, liberties, weak groups, influence, connection, thickness, territory, or sente-like pressure. Avoid exact-coordinate shortcuts.
+Use simple Python only. You may import math or sgfmill. No file/network access, eval, exec, dynamic imports, or tools.
+Return one Python code block only.
+
+Positive support boards:
+{{positive_support}}
+Negative support boards:
+{{negative_support}}
+Return format:
+```python
+def explain_1(board: list[str], color: str) -> bool:
+    ...
+def explain_2(board: list[str], color: str) -> bool:
+    ...
+def explain_3(board: list[str], color: str) -> bool:
+    ...
+```

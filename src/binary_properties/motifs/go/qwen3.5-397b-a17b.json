@@ -1,0 +1,453 @@
+{
+  "schema_version": 1,
+  "game": "go",
+  "motifs": [
+    {
+      "id": "cd3fd528c2eb4978",
+      "name": "stone_count_advantage",
+      "description": "The evaluated color has more stones on the board than the opponent.",
+      "source": "MOTIF_NAME = 'stone_count_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on the board than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_count = 0\n    opp_count = 0\n    for row in board_rows:\n        for stone in row:\n            if stone == color:\n                color_count += 1\n            elif stone == opp:\n                opp_count += 1\n    return color_count > opp_count",
+      "delta": 0.06797
+    },
+    {
+      "id": "208dcfaf2eaf9b39",
+      "name": "eye_space_potential_advantage",
+      "description": "The evaluated color has more 2x2 blocks with at least 2 stones of their color and at least 1 empty point, indicating eye-making potential.",
+      "source": "MOTIF_NAME = 'eye_space_potential_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more 2x2 blocks with at least 2 stones of their color and at least 1 empty point, indicating eye-making potential.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_potential = 0\n    opp_potential = 0\n    \n    for r in range(18):\n        for c in range(18):\n            s00 = board_rows[r][c]\n            s01 = board_rows[r][c+1]\n            s10 = board_rows[r+1][c]\n            s11 = board_rows[r+1][c+1]\n            \n            color_count = (s00 == color) + (s01 == color) + (s10 == color) + (s11 == color)\n            opp_count = (s00 == opp) + (s01 == opp) + (s10 == opp) + (s11 == opp)\n            empty_count = (s00 == '.') + (s01 == '.') + (s10 == '.') + (s11 == '.')\n            \n            if color_count >= 2 and empty_count >= 1:\n                color_potential += 1\n            if opp_count >= 2 and empty_count >= 1:\n                opp_potential += 1\n    \n    return color_potential > opp_potential",
+      "delta": 0.06612999999999997
+    },
+    {
+      "id": "20d40e4446d30fd1",
+      "name": "unpressed_diagonal_advantage",
+      "description": "The evaluated color has more stones with at least one diagonal empty point not blocked by opponent noses, indicating uncrowded shape.",
+      "source": "MOTIF_NAME = 'unpressed_diagonal_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones with at least one diagonal empty point not blocked by opponent noses, indicating uncrowded shape.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_score = 0\n    opp_score = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            has_unpressed = False\n            \n            # Check Top-Left diagonal (r-1, c-1)\n            if r > 0 and c > 0:\n                if board_rows[r-1][c-1] == '.':\n                    if not (board_rows[r-1][c] == opp and board_rows[r][c-1] == opp):\n                        has_unpressed = True\n            \n            # Check Top-Right diagonal (r-1, c+1)\n            if not has_unpressed and r > 0 and c < 18:\n                if board_rows[r-1][c+1] == '.':\n                    if not (board_rows[r-1][c] == opp and board_rows[r][c+1] == opp):\n                        has_unpressed = True\n            \n            # Check Bottom-Left diagonal (r+1, c-1)\n            if not has_unpressed and r < 18 and c > 0:\n                if board_rows[r+1][c-1] == '.':\n                    if not (board_rows[r+1][c] == opp and board_rows[r][c-1] == opp):\n                        has_unpressed = True\n            \n            # Check Bottom-Right diagonal (r+1, c+1)\n            if not has_unpressed and r < 18 and c < 18:\n                if board_rows[r+1][c+1] == '.':\n                    if not (board_rows[r+1][c] == opp and board_rows[r][c+1] == opp):\n                        has_unpressed = True\n            \n            if has_unpressed:\n                if stone == color:\n                    color_score += 1\n                else:\n                    opp_score += 1\n    \n    return color_score > opp_score",
+      "delta": 0.062419999999999976
+    },
+    {
+      "id": "a266a3eb55582b1c",
+      "name": "diagonal_connection_advantage",
+      "description": "The evaluated color has more stones with at least one diagonal same-color neighbor, indicating flexible connectivity.",
+      "source": "MOTIF_NAME = 'diagonal_connection_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones with at least one diagonal same-color neighbor, indicating flexible connectivity.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_count = 0\n    opp_count = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            has_diag = False\n            for dr, dc in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    if board_rows[nr][nc] == stone:\n                        has_diag = True\n                        break\n            \n            if has_diag:\n                if stone == color:\n                    color_count += 1\n                else:\n                    opp_count += 1\n    \n    return color_count > opp_count",
+      "delta": 0.05506
+    },
+    {
+      "id": "10427a2e1b51f0f9",
+      "name": "open_quarter_advantage",
+      "description": "The evaluated color has more stones where at least one diagonal quadrant has 2+ consecutive empty points, indicating open development directions.",
+      "source": "MOTIF_NAME = 'open_quarter_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones where at least one diagonal quadrant has 2+ consecutive empty points, indicating open development directions.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_open = 0\n    opp_open = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone not in ('B', 'W'):\n                continue\n            \n            has_open_quarter = False\n            \n            # Top-left quadrant: check diagonal up-left for 2+ empty\n            if r >= 2 and c >= 2:\n                if board_rows[r-1][c-1] == '.' and board_rows[r-2][c-2] == '.':\n                    has_open_quarter = True\n            # Top-right quadrant\n            if not has_open_quarter and r >= 2 and c < 17:\n                if board_rows[r-1][c+1] == '.' and board_rows[r-2][c+2] == '.':\n                    has_open_quarter = True\n            # Bottom-left quadrant\n            if not has_open_quarter and r < 17 and c >= 2:\n                if board_rows[r+1][c-1] == '.' and board_rows[r+2][c-2] == '.':\n                    has_open_quarter = True\n            # Bottom-right quadrant\n            if not has_open_quarter and r < 17 and c < 17:\n                if board_rows[r+1][c+1] == '.' and board_rows[r+2][c+2] == '.':\n                    has_open_quarter = True\n            \n            if has_open_quarter:\n                if stone == color:\n                    color_open += 1\n                else:\n                    opp_open += 1\n    \n    return color_open > opp_open",
+      "delta": 0.05398000000000003
+    },
+    {
+      "id": "0d443bd0bb3ef8f9",
+      "name": "influence_line_advantage",
+      "description": "The evaluated color has more stones on the 3rd and 4th lines from edges than the opponent.",
+      "source": "MOTIF_NAME = 'influence_line_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on the 3rd and 4th lines from edges than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_inf = 0\n    opp_inf = 0\n    \n    for r in range(19):\n        row = board_rows[r]\n        for c in range(19):\n            stone = row[c]\n            if stone == '.':\n                continue\n            is_influence = (r == 2 or r == 3 or r == 15 or r == 16 or\n                           c == 2 or c == 3 or c == 15 or c == 16)\n            if is_influence:\n                if stone == color:\n                    color_inf += 1\n                elif stone == opp:\n                    opp_inf += 1\n    \n    return color_inf > opp_inf",
+      "delta": 0.04737999999999998
+    },
+    {
+      "id": "582f4b573723ea61",
+      "name": "balanced_shape_advantage",
+      "description": "The evaluated color has more stones with exactly 1-2 same-color neighbors and at least 2 liberties, indicating well-balanced efficient shape.",
+      "source": "MOTIF_NAME = 'balanced_shape_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones with exactly 1-2 same-color neighbors and at least 2 liberties, indicating well-balanced efficient shape.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_balanced = 0\n    opp_balanced = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            same_neighbors = 0\n            liberties = 0\n            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    neighbor = board_rows[nr][nc]\n                    if neighbor == stone:\n                        same_neighbors += 1\n                    elif neighbor == '.':\n                        liberties += 1\n            \n            if 1 <= same_neighbors <= 2 and liberties >= 2:\n                if stone == color:\n                    color_balanced += 1\n                else:\n                    opp_balanced += 1\n    \n    return color_balanced > opp_balanced",
+      "delta": 0.04698000000000002
+    },
+    {
+      "id": "558afb9eb8de3573",
+      "name": "liberty_rich_advantage",
+      "description": "The evaluated color has more stones with 2 or more liberties than the opponent.",
+      "source": "MOTIF_NAME = 'liberty_rich_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones with 2 or more liberties than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_rich = 0\n    opp_rich = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            liberty_count = 0\n            for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]:\n                nr, nc = r+dr, c+dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    if board_rows[nr][nc] == '.':\n                        liberty_count += 1\n            \n            if liberty_count >= 2:\n                if stone == color:\n                    color_rich += 1\n                elif stone == opp:\n                    opp_rich += 1\n    \n    return color_rich > opp_rich",
+      "delta": 0.04630000000000001
+    },
+    {
+      "id": "20fe9040e5eb90a7",
+      "name": "solid_connection_advantage",
+      "description": "The evaluated color has more stones that are orthogonally connected to at least one same-color stone, indicating solid group formation.",
+      "source": "MOTIF_NAME = 'solid_connection_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones that are orthogonally connected to at least one same-color stone, indicating solid group formation.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_connected = 0\n    opp_connected = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            # Check for orthogonal connection to same-color stone\n            is_connected = False\n            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    if board_rows[nr][nc] == stone:\n                        is_connected = True\n                        break\n            \n            if is_connected:\n                if stone == color:\n                    color_connected += 1\n                else:\n                    opp_connected += 1\n    \n    return color_connected > opp_connected",
+      "delta": 0.041179999999999994
+    },
+    {
+      "id": "eb1e7dc1de4c5084",
+      "name": "expansion_directions_advantage",
+      "description": "The evaluated color has more stones on lines 3-4 from edges with empty space in 2+ cardinal directions toward center, indicating multi-directional expansion potential.",
+      "source": "MOTIF_NAME = 'expansion_directions_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on lines 3-4 from edges with empty space in 2+ cardinal directions toward center, indicating multi-directional expansion potential.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_exp = 0\n    opp_exp = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            on_line_3_4 = (r == 2 or r == 3 or r == 15 or r == 16 or \n                          c == 2 or c == 3 or c == 15 or c == 16)\n            if not on_line_3_4:\n                continue\n            \n            expansion_dirs = 0\n            \n            if r == 2 or r == 3:\n                if r + 1 < 19 and board_rows[r + 1][c] == '.':\n                    expansion_dirs += 1\n            elif r == 15 or r == 16:\n                if r - 1 >= 0 and board_rows[r - 1][c] == '.':\n                    expansion_dirs += 1\n            \n            if c == 2 or c == 3:\n                if c + 1 < 19 and board_rows[r][c + 1] == '.':\n                    expansion_dirs += 1\n            elif c == 15 or c == 16:\n                if c - 1 >= 0 and board_rows[r][c - 1] == '.':\n                    expansion_dirs += 1\n            \n            if expansion_dirs >= 2:\n                if stone == color:\n                    color_exp += 1\n                else:\n                    opp_exp += 1\n    \n    return color_exp > opp_exp",
+      "delta": 0.03914999999999996
+    },
+    {
+      "id": "41c6f124aa40f039",
+      "name": "corner_territory_advantage",
+      "description": "The evaluated color has more stones in the four corner regions (6x6 each) than the opponent.",
+      "source": "MOTIF_NAME = 'corner_territory_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones in the four corner regions (6x6 each) than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_corner = 0\n    opp_corner = 0\n    corners = [(0, 0), (0, 13), (13, 0), (13, 13)]\n    checked = set()\n    for sr, sc in corners:\n        for dr in range(6):\n            for dc in range(6):\n                r, c = sr + dr, sc + dc\n                if 0 <= r < 19 and 0 <= c < 19:\n                    if (r, c) not in checked:\n                        checked.add((r, c))\n                        stone = board_rows[r][c]\n                        if stone == color:\n                            color_corner += 1\n                        elif stone == opp:\n                            opp_corner += 1\n    return color_corner > opp_corner",
+      "delta": 0.03828999999999999
+    },
+    {
+      "id": "d28242de0339fa84",
+      "name": "framework_base_advantage",
+      "description": "The evaluated color has more stones on the 3rd-4th lines with empty space toward center and same-color support toward the edge, indicating good framework bases.",
+      "source": "MOTIF_NAME = 'framework_base_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on the 3rd-4th lines with empty space toward center and same-color support toward the edge, indicating good framework bases.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_bases = 0\n    opp_bases = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            is_framework_line = (r == 2 or r == 3 or r == 15 or r == 16 or c == 2 or c == 3 or c == 15 or c == 16)\n            if not is_framework_line:\n                continue\n            \n            has_center_empty = False\n            has_edge_support = False\n            \n            # Top edge (rows 2-3), check below for empty, above for support\n            if r == 2 or r == 3:\n                if r + 1 < 19 and board_rows[r + 1][c] == '.':\n                    has_center_empty = True\n                if r - 1 >= 0 and board_rows[r - 1][c] == stone:\n                    has_edge_support = True\n            \n            # Bottom edge (rows 15-16), check above for empty, below for support\n            if r == 15 or r == 16:\n                if r - 1 >= 0 and board_rows[r - 1][c] == '.':\n                    has_center_empty = True\n                if r + 1 < 19 and board_rows[r + 1][c] == stone:\n                    has_edge_support = True\n            \n            # Left edge (cols 2-3), check right for empty, left for support\n            if c == 2 or c == 3:\n                if c + 1 < 19 and board_rows[r][c + 1] == '.':\n                    has_center_empty = True\n                if c - 1 >= 0 and board_rows[r][c - 1] == stone:\n                    has_edge_support = True\n            \n            # Right edge (cols 15-16), check left for empty, right for support\n            if c == 15 or c == 16:\n                if c - 1 >= 0 and board_rows[r][c - 1] == '.':\n                    has_center_empty = True\n                if c + 1 < 19 and board_rows[r][c + 1] == stone:\n                    has_edge_support = True\n            \n            if has_center_empty and has_edge_support:\n                if stone == color:\n                    color_bases += 1\n                else:\n                    opp_bases += 1\n    \n    return color_bases > opp_bases",
+      "delta": 0.03803000000000001
+    },
+    {
+      "id": "7918a4ea7d782279",
+      "name": "cutting_point_potential_advantage",
+      "description": "The evaluated color has more empty points adjacent to both colors where placing a stone would cut between opponent groups, indicating fighting advantage.",
+      "source": "MOTIF_NAME = 'cutting_point_potential_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more empty points adjacent to both colors where placing a stone would cut between opponent groups, indicating fighting advantage.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_cuts = 0\n    opp_cuts = 0\n    \n    for r in range(19):\n        for c in range(19):\n            if board_rows[r][c] != '.':\n                continue\n            \n            adj_color = set()\n            adj_opp = set()\n            \n            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    neighbor = board_rows[nr][nc]\n                    if neighbor == color:\n                        adj_color.add((nr, nc))\n                    elif neighbor == opp:\n                        adj_opp.add((nr, nc))\n            \n            if len(adj_color) >= 1 and len(adj_opp) >= 1:\n                color_diag = 0\n                opp_diag = 0\n                for dr, dc in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:\n                    nr, nc = r + dr, c + dc\n                    if 0 <= nr < 19 and 0 <= nc < 19:\n                        if board_rows[nr][nc] == color:\n                            color_diag += 1\n                        elif board_rows[nr][nc] == opp:\n                            opp_diag += 1\n                \n                if color_diag >= 1 and opp_diag == 0:\n                    color_cuts += 1\n                elif opp_diag >= 1 and color_diag == 0:\n                    opp_cuts += 1\n    \n    return color_cuts > opp_cuts",
+      "delta": 0.03678999999999999
+    },
+    {
+      "id": "580e3d342bc7f6e7",
+      "name": "outward_facing_advantage",
+      "description": "The evaluated color has more stones on lines 3-5 from edges with empty diagonal space toward center, indicating outward-facing influence.",
+      "source": "MOTIF_NAME = 'outward_facing_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on lines 3-5 from edges with empty diagonal space toward center, indicating outward-facing influence.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_outward = 0\n    opp_outward = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone not in ('B', 'W'):\n                continue\n            \n            is_outward = False\n            \n            # Check if on lines 3-5 from any edge with empty diagonal toward center\n            # Top edge (rows 2,3,4), diagonal down toward center\n            if r in (2, 3, 4):\n                if c < 18 and board_rows[r+1][c+1] == '.':\n                    is_outward = True\n                if c > 0 and board_rows[r+1][c-1] == '.':\n                    is_outward = True\n            # Bottom edge (rows 14,15,16), diagonal up toward center\n            if r in (14, 15, 16):\n                if c < 18 and board_rows[r-1][c+1] == '.':\n                    is_outward = True\n                if c > 0 and board_rows[r-1][c-1] == '.':\n                    is_outward = True\n            # Left edge (cols 2,3,4), diagonal right toward center\n            if c in (2, 3, 4):\n                if r < 18 and board_rows[r+1][c+1] == '.':\n                    is_outward = True\n                if r > 0 and board_rows[r-1][c+1] == '.':\n                    is_outward = True\n            # Right edge (cols 14,15,16), diagonal left toward center\n            if c in (14, 15, 16):\n                if r < 18 and board_rows[r+1][c-1] == '.':\n                    is_outward = True\n                if r > 0 and board_rows[r-1][c-1] == '.':\n                    is_outward = True\n            \n            if is_outward:\n                if stone == color:\n                    color_outward += 1\n                else:\n                    opp_outward += 1\n    \n    return color_outward > opp_outward",
+      "delta": 0.03465999999999997
+    },
+    {
+      "id": "719612e3f1a814d4",
+      "name": "directional_liberty_advantage",
+      "description": "The evaluated color has more stones with empty adjacent points in 3 or 4 orthogonal directions, indicating superior flexibility and escape options.",
+      "source": "MOTIF_NAME = 'directional_liberty_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones with empty adjacent points in 3 or 4 orthogonal directions, indicating superior flexibility and escape options.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_flex = 0\n    opp_flex = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone not in ('B', 'W'):\n                continue\n            \n            liberty_dirs = 0\n            if r > 0 and board_rows[r-1][c] == '.':\n                liberty_dirs += 1\n            if r < 18 and board_rows[r+1][c] == '.':\n                liberty_dirs += 1\n            if c > 0 and board_rows[r][c-1] == '.':\n                liberty_dirs += 1\n            if c < 18 and board_rows[r][c+1] == '.':\n                liberty_dirs += 1\n            \n            if liberty_dirs >= 3:\n                if stone == color:\n                    color_flex += 1\n                else:\n                    opp_flex += 1\n    \n    return color_flex > opp_flex",
+      "delta": 0.03262999999999999
+    },
+    {
+      "id": "37a3649c24caf0de",
+      "name": "shared_liberty_efficiency_advantage",
+      "description": "The evaluated color has more empty points that are adjacent to 2+ same-color stones, indicating efficient group shape and territory potential.",
+      "source": "MOTIF_NAME = 'shared_liberty_efficiency_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more empty points that are adjacent to 2+ same-color stones, indicating efficient group shape and territory potential.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_shared = 0\n    opp_shared = 0\n    \n    for r in range(19):\n        for c in range(19):\n            if board_rows[r][c] != '.':\n                continue\n            \n            color_adj = 0\n            opp_adj = 0\n            \n            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    neighbor = board_rows[nr][nc]\n                    if neighbor == color:\n                        color_adj += 1\n                    elif neighbor == opp:\n                        opp_adj += 1\n            \n            if color_adj >= 2:\n                color_shared += 1\n            if opp_adj >= 2:\n                opp_shared += 1\n    \n    return color_shared > opp_shared",
+      "delta": 0.03256999999999999
+    },
+    {
+      "id": "555411e7ce7a6443",
+      "name": "side_base_advantage",
+      "description": "The evaluated color has more 3rd-line skipped pairs (two stones with one empty space between) on the sides, indicating stable territorial bases.",
+      "source": "MOTIF_NAME = 'side_base_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more 3rd-line skipped pairs (two stones with one empty space between) on the sides, indicating stable territorial bases.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_bases = 0\n    opp_bases = 0\n    \n    side_rows = [2, 16]\n    for r in side_rows:\n        for c in range(17):\n            s0 = board_rows[r][c]\n            s1 = board_rows[r][c+1]\n            s2 = board_rows[r][c+2]\n            if s0 == s2 and s0 in ('B', 'W') and s1 == '.':\n                if s0 == color:\n                    color_bases += 1\n                else:\n                    opp_bases += 1\n    \n    side_cols = [2, 16]\n    for c in side_cols:\n        for r in range(17):\n            s0 = board_rows[r][c]\n            s1 = board_rows[r+1][c]\n            s2 = board_rows[r+2][c]\n            if s0 == s2 and s0 in ('B', 'W') and s1 == '.':\n                if s0 == color:\n                    color_bases += 1\n                else:\n                    opp_bases += 1\n    \n    return color_bases > opp_bases",
+      "delta": 0.03154999999999997
+    },
+    {
+      "id": "ce5fdae6c5c59534",
+      "name": "knight_jump_advantage",
+      "description": "The evaluated color has more knight-jump stone pairs (1-2 or 2-1 diagonal offset), indicating efficient flexible shape.",
+      "source": "MOTIF_NAME = 'knight_jump_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more knight-jump stone pairs (1-2 or 2-1 diagonal offset), indicating efficient flexible shape.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_jumps = 0\n    opp_jumps = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            jump_found = False\n            for dr, dc in [(-2, -1), (-2, 1), (-1, -2), (-1, 2),\n                           (1, -2), (1, 2), (2, -1), (2, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    if board_rows[nr][nc] == stone:\n                        jump_found = True\n                        break\n            \n            if jump_found:\n                if stone == color:\n                    color_jumps += 1\n                else:\n                    opp_jumps += 1\n    \n    return color_jumps > opp_jumps",
+      "delta": 0.030590000000000006
+    },
+    {
+      "id": "ca86f27588e5bb82",
+      "name": "adjacent_empty_advantage",
+      "description": "The evaluated color stones are adjacent to more unique empty points than the opponent.",
+      "source": "MOTIF_NAME = 'adjacent_empty_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color stones are adjacent to more unique empty points than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_libs = set()\n    opp_libs = set()\n    for r, row in enumerate(board_rows):\n        for c, stone in enumerate(row):\n            if stone == '.': continue\n            target_set = color_libs if stone == color else opp_libs\n            for dr, dc in [(-1,0),(1,0),(0,-1),(0,1)]:\n                nr, nc = r+dr, c+dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    if board_rows[nr][nc] == '.':\n                        target_set.add((nr,nc))\n    return len(color_libs) > len(opp_libs)",
+      "delta": 0.030179999999999985
+    },
+    {
+      "id": "f433cd96972554d0",
+      "name": "group_vitality_advantage",
+      "description": "The evaluated color has more stones in groups with 5 or more unique liberties, indicating groups with strong life potential and fighting strength.",
+      "source": "MOTIF_NAME = 'group_vitality_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones in groups with 5 or more unique liberties, indicating groups with strong life potential and fighting strength.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    \n    visited = [[False]*19 for _ in range(19)]\n    color_vital = 0\n    opp_vital = 0\n    \n    def get_group_and_liberties(start_r, start_c, stone_color):\n        group = []\n        liberties = set()\n        stack = [(start_r, start_c)]\n        visited[start_r][start_c] = True\n        \n        while stack:\n            r, c = stack.pop()\n            group.append((r, c))\n            \n            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    neighbor = board_rows[nr][nc]\n                    if neighbor == '.':\n                        liberties.add((nr, nc))\n                    elif neighbor == stone_color and not visited[nr][nc]:\n                        visited[nr][nc] = True\n                        stack.append((nr, nc))\n        \n        return group, liberties\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.' or visited[r][c]:\n                continue\n            \n            group, liberties = get_group_and_liberties(r, c, stone)\n            \n            if len(liberties) >= 5:\n                if stone == color:\n                    color_vital += len(group)\n                else:\n                    opp_vital += len(group)\n    \n    return color_vital > opp_vital",
+      "delta": 0.02843000000000001
+    },
+    {
+      "id": "54b6e367407a928e",
+      "name": "diagonal_liberty_fork_advantage",
+      "description": "The evaluated color has more stones with diagonal same-color neighbors on opposite corners (fork pattern), indicating flexible multi-directional connectivity.",
+      "source": "MOTIF_NAME = 'diagonal_liberty_fork_advantage'\nMOTIF_NAME = 'diagonal_liberty_fork_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones with diagonal same-color neighbors on opposite corners (fork pattern), indicating flexible multi-directional connectivity.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_fork = 0\n    opp_fork = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone not in ('B', 'W'):\n                continue\n            \n            tl = board_rows[r-1][c-1] if r > 0 and c > 0 else None\n            tr = board_rows[r-1][c+1] if r > 0 and c < 18 else None\n            bl = board_rows[r+1][c-1] if r < 18 and c > 0 else None\n            br = board_rows[r+1][c+1] if r < 18 and c < 18 else None\n            \n            has_fork = False\n            if tl == stone and br == stone:\n                has_fork = True\n            if tr == stone and bl == stone:\n                has_fork = True\n            \n            if has_fork:\n                if stone == color:\n                    color_fork += 1\n                else:\n                    opp_fork += 1\n    \n    return color_fork > opp_fork",
+      "delta": 0.02665999999999996
+    },
+    {
+      "id": "942b9e981e759a91",
+      "name": "expansion_potential_advantage",
+      "description": "The evaluated color has more stones on lines 2-6 with empty space toward the board center, indicating good expansion potential.",
+      "source": "MOTIF_NAME = 'expansion_potential_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on lines 2-6 with empty space toward the board center, indicating good expansion potential.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_expansion = 0\n    opp_expansion = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            # Check if stone is on lines 2-6 from any edge (territory/influence zone)\n            on_territory_line = (1 <= r <= 5 or 13 <= r <= 17 or 1 <= c <= 5 or 13 <= c <= 17)\n            if not on_territory_line:\n                continue\n            \n            # Check if stone has empty space facing the center\n            faces_center = False\n            \n            # From top edge (rows 1-5), check if space below is empty\n            if 1 <= r <= 5:\n                if r + 1 < 19 and board_rows[r + 1][c] == '.':\n                    faces_center = True\n            \n            # From bottom edge (rows 13-17), check if space above is empty\n            if 13 <= r <= 17:\n                if r - 1 >= 0 and board_rows[r - 1][c] == '.':\n                    faces_center = True\n            \n            # From left edge (cols 1-5), check if space right is empty\n            if 1 <= c <= 5:\n                if c + 1 < 19 and board_rows[r][c + 1] == '.':\n                    faces_center = True\n            \n            # From right edge (cols 13-17), check if space left is empty\n            if 13 <= c <= 17:\n                if c - 1 >= 0 and board_rows[r][c - 1] == '.':\n                    faces_center = True\n            \n            if faces_center:\n                if stone == color:\n                    color_expansion += 1\n                else:\n                    opp_expansion += 1\n    \n    return color_expansion > opp_expansion",
+      "delta": 0.023970000000000047
+    },
+    {
+      "id": "9e8b7ee73c4a292e",
+      "name": "fourth_line_advantage",
+      "description": "The evaluated color has more stones on the fourth line from each edge than the opponent.",
+      "source": "MOTIF_NAME = 'fourth_line_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on the fourth line from each edge than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_fourth = 0\n    opp_fourth = 0\n    \n    for r in range(19):\n        row = board_rows[r]\n        for c in range(19):\n            stone = row[c]\n            if stone == '.':\n                continue\n            is_fourth = (r == 3 or r == 15 or c == 3 or c == 15)\n            if is_fourth:\n                if stone == color:\n                    color_fourth += 1\n                elif stone == opp:\n                    opp_fourth += 1\n    \n    return color_fourth > opp_fourth",
+      "delta": 0.023320000000000007
+    },
+    {
+      "id": "46833dcbb71181b6",
+      "name": "well_connected_stone_advantage",
+      "description": "The evaluated color has more stones with 3 or more same-color neighbors in all 8 directions, indicating strong group integration.",
+      "source": "MOTIF_NAME = 'well_connected_stone_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones with 3 or more same-color neighbors in all 8 directions, indicating strong group integration.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_connected = 0\n    opp_connected = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            same_neighbors = 0\n            for dr in [-1, 0, 1]:\n                for dc in [-1, 0, 1]:\n                    if dr == 0 and dc == 0:\n                        continue\n                    nr, nc = r + dr, c + dc\n                    if 0 <= nr < 19 and 0 <= nc < 19:\n                        if board_rows[nr][nc] == stone:\n                            same_neighbors += 1\n            \n            if same_neighbors >= 3:\n                if stone == color:\n                    color_connected += 1\n                else:\n                    opp_connected += 1\n    \n    return color_connected > opp_connected",
+      "delta": 0.023129999999999984
+    },
+    {
+      "id": "b658c48ba1072a6d",
+      "name": "edge_presence_advantage",
+      "description": "The evaluated color has more stones on the edge zones (first 3 lines) than the opponent.",
+      "source": "MOTIF_NAME = 'edge_presence_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on the edge zones (first 3 lines) than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_edge = 0\n    opp_edge = 0\n    for r, row in enumerate(board_rows):\n        is_edge_row = (r < 3 or r > 15)\n        for c, stone in enumerate(row):\n            is_edge_col = (c < 3 or c > 15)\n            if is_edge_row or is_edge_col:\n                if stone == color:\n                    color_edge += 1\n                elif stone == opp:\n                    opp_edge += 1\n    return color_edge > opp_edge",
+      "delta": 0.018919999999999992
+    },
+    {
+      "id": "119cba71feac8e27",
+      "name": "center_control_advantage",
+      "description": "The evaluated color has more stones in the center region (rows 6-12, cols 6-12) than the opponent.",
+      "source": "MOTIF_NAME = 'center_control_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones in the center region (rows 6-12, cols 6-12) than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_center = 0\n    opp_center = 0\n    for r in range(6, 13):\n        row = board_rows[r]\n        for c in range(6, 13):\n            stone = row[c]\n            if stone == color:\n                color_center += 1\n            elif stone == opp:\n                opp_center += 1\n    return color_center > opp_center",
+      "delta": 0.018409999999999982
+    },
+    {
+      "id": "cb8c1b09001d0af0",
+      "name": "effective_cutting_density_advantage",
+      "description": "The evaluated color has a higher density of effective cutting stones (cutting opponent with some freedom) than the opponent.",
+      "source": "MOTIF_NAME = 'effective_cutting_density_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has a higher density of effective cutting stones (cutting opponent with some freedom) than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_cuts = 0\n    opp_cuts = 0\n    color_stones = 0\n    opp_stones = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            is_color = (stone == color)\n            if is_color:\n                color_stones += 1\n            else:\n                opp_stones += 1\n            \n            # Check for freedom (liberty or connection to same color)\n            has_freedom = False\n            for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]:\n                nr, nc = r+dr, c+dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    n = board_rows[nr][nc]\n                    if n == '.' or n == stone:\n                        has_freedom = True\n                        break\n            \n            # If completely surrounded by opponent, it's likely dead/ineffective.\n            if not has_freedom:\n                continue\n                \n            # Check for cutting (opponent on opposite orthogonal sides)\n            is_cut = False\n            # Vertical cut\n            if r > 0 and r < 18:\n                n_up = board_rows[r-1][c]\n                n_down = board_rows[r+1][c]\n                if is_color:\n                    if n_up == opp and n_down == opp:\n                        is_cut = True\n                else:\n                    if n_up == color and n_down == color:\n                        is_cut = True\n            # Horizontal cut\n            if c > 0 and c < 18:\n                n_left = board_rows[r][c-1]\n                n_right = board_rows[r][c+1]\n                if is_color:\n                    if n_left == opp and n_right == opp:\n                        is_cut = True\n                else:\n                    if n_left == color and n_right == color:\n                        is_cut = True\n            \n            if is_cut:\n                if is_color:\n                    color_cuts += 1\n                else:\n                    opp_cuts += 1\n\n    if color_stones == 0:\n        return False\n    if opp_stones == 0:\n        return color_cuts > 0\n    \n    return color_cuts * opp_stones > opp_cuts * color_stones",
+      "delta": 0.017809999999999993
+    },
+    {
+      "id": "a6d632cb7eb8a08e",
+      "name": "diagonal_flexibility_advantage",
+      "description": "The evaluated color has more stones with at least 2 diagonal empty neighbors, indicating flexible shape with diagonal expansion options.",
+      "source": "MOTIF_NAME = 'diagonal_flexibility_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones with at least 2 diagonal empty neighbors, indicating flexible shape with diagonal expansion options.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_flex = 0\n    opp_flex = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            diag_empty = 0\n            for dr, dc in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    if board_rows[nr][nc] == '.':\n                        diag_empty += 1\n                else:\n                    diag_empty += 1\n            \n            if diag_empty >= 2:\n                if stone == color:\n                    color_flex += 1\n                else:\n                    opp_flex += 1\n    \n    return color_flex > opp_flex",
+      "delta": 0.015880000000000005
+    },
+    {
+      "id": "66f3417d81e788e8",
+      "name": "edge_support_advantage",
+      "description": "The evaluated color has more stones on the first two lines that have same-color support on the third line, indicating stable edge presence.",
+      "source": "MOTIF_NAME = 'edge_support_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones on the first two lines that have same-color support on the third line, indicating stable edge presence.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_support = 0\n    opp_support = 0\n    \n    # Check stones on first two lines (rows 0-1 and 17-18)\n    edge_rows = [0, 1, 17, 18]\n    third_line_rows = {0: 2, 1: 2, 17: 16, 18: 16}\n    \n    for r in edge_rows:\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone not in ('B', 'W'):\n                continue\n            \n            # Check if there is same-color support on the third line\n            support_r = third_line_rows[r]\n            has_support = False\n            \n            # Check vertically adjacent position on third line\n            if 0 <= support_r < 19 and board_rows[support_r][c] == stone:\n                has_support = True\n            \n            # Check diagonally adjacent positions on third line\n            if not has_support:\n                for dc in [-1, 1]:\n                    nc = c + dc\n                    if 0 <= nc < 19 and board_rows[support_r][nc] == stone:\n                        has_support = True\n                        break\n            \n            # Also check horizontal support on same edge line\n            if not has_support:\n                for dc in [-1, 1]:\n                    nc = c + dc\n                    if 0 <= nc < 19 and board_rows[r][nc] == stone:\n                        has_support = True\n                        break\n            \n            if has_support:\n                if stone == color:\n                    color_support += 1\n                else:\n                    opp_support += 1\n    \n    return color_support > opp_support",
+      "delta": 0.013880000000000003
+    },
+    {
+      "id": "b86bd254aa079897",
+      "name": "pair_connection_advantage",
+      "description": "The evaluated color has more stones that are part of exactly 2-stone groups (pairs) than the opponent.",
+      "source": "MOTIF_NAME = 'pair_connection_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more stones that are part of exactly 2-stone groups (pairs) than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_pairs = 0\n    opp_pairs = 0\n    \n    def get_group(start_r, start_c, stone_color):\n        group = set()\n        stack = [(start_r, start_c)]\n        while stack:\n            r, c = stack.pop()\n            if (r, c) in group:\n                continue\n            if board_rows[r][c] != stone_color:\n                continue\n            group.add((r, c))\n            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:\n                nr, nc = r + dr, c + dc\n                if 0 <= nr < 19 and 0 <= nc < 19:\n                    if board_rows[nr][nc] == stone_color:\n                        stack.append((nr, nc))\n        return group\n    \n    visited = set()\n    for r in range(19):\n        for c in range(19):\n            if (r, c) in visited:\n                continue\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            group = get_group(r, c, stone)\n            visited.update(group)\n            if len(group) == 2:\n                if stone == color:\n                    color_pairs += 2\n                else:\n                    opp_pairs += 2\n    \n    return color_pairs > opp_pairs",
+      "delta": 0.011359999999999981
+    },
+    {
+      "id": "beb7172d8d81659e",
+      "name": "hane_shape_advantage",
+      "description": "The evaluated color has more hane shapes (stone with opponent diagonal neighbor and own orthogonal neighbor on opposite side), indicating active fighting shape.",
+      "source": "MOTIF_NAME = 'hane_shape_advantage'\nMOTIF_DESCRIPTION = 'The evaluated color has more hane shapes (stone with opponent diagonal neighbor and own orthogonal neighbor on opposite side), indicating active fighting shape.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    color_hanes = 0\n    opp_hanes = 0\n    \n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            \n            is_hane = False\n            \n            # Check each diagonal direction for opponent, then opposite orthogonal for own stone\n            # Top-left diagonal has opponent, check right or down for own stone\n            if r > 0 and c > 0 and board_rows[r-1][c-1] == opp:\n                if c + 1 < 19 and board_rows[r][c+1] == stone:\n                    is_hane = True\n                if r + 1 < 19 and board_rows[r+1][c] == stone:\n                    is_hane = True\n            \n            # Top-right diagonal has opponent, check left or down for own stone\n            if r > 0 and c < 18 and board_rows[r-1][c+1] == opp:\n                if c - 1 >= 0 and board_rows[r][c-1] == stone:\n                    is_hane = True\n                if r + 1 < 19 and board_rows[r+1][c] == stone:\n                    is_hane = True\n            \n            # Bottom-left diagonal has opponent, check right or up for own stone\n            if r < 18 and c > 0 and board_rows[r+1][c-1] == opp:\n                if c + 1 < 19 and board_rows[r][c+1] == stone:\n                    is_hane = True\n                if r - 1 >= 0 and board_rows[r-1][c] == stone:\n                    is_hane = True\n            \n            # Bottom-right diagonal has opponent, check left or up for own stone\n            if r < 18 and c < 18 and board_rows[r+1][c+1] == opp:\n                if c - 1 >= 0 and board_rows[r][c-1] == stone:\n                    is_hane = True\n                if r - 1 >= 0 and board_rows[r-1][c] == stone:\n                    is_hane = True\n            \n            if is_hane:\n                if stone == color:\n                    color_hanes += 1\n                else:\n                    opp_hanes += 1\n    \n    return color_hanes > opp_hanes",
+      "delta": 0.011160000000000003
+    }
+  ],
+  "metadata": {
+    "library_id": "go/qwen3.5-397b-a17b",
+    "model": "Qwen3.5-397B-A17B",
+    "run_id": "basis_api_runs/tokenfactory_go_bp_max64k_100it_c070_20260721_102438/go/qwen35/run",
+    "motif_count": 31,
+    "score_definition": "P(motif=True | winning) - P(motif=True | losing), preserved from the canonical discovery ranking.",
+    "archive": "reports/go/appendix_examples/provenance/basis_sources.jsonl.gz",
+    "archive_sha256": "3578cc235b87ca4b08479b4ec87d3b6fae847e1bbdb3b1d8c7acb3c6c870342b",
+    "ranking_sha256": "9e70302120cdc347706eeccd20f6effe25dfd0adbfcd1ebe8ed88ff181978f0c",
+    "source_commit": "bad3bd15b867f8c12517d087132fb8187d7e5c08",
+    "motif_provenance": {
+      "cd3fd528c2eb4978": {
+        "source_sha256": "cd3fd528c2eb4978c5db3e394bc739d9f567e15276e58a4968754b32c24c3a7d",
+        "rank": 1,
+        "discovery_index": 0,
+        "p_true_winning": 0.29585,
+        "p_true_losing": 0.22788
+      },
+      "208dcfaf2eaf9b39": {
+        "source_sha256": "208dcfaf2eaf9b3914087ca90c43d0ff674d1f084bd3ccc04c0b05caaf8b6dbe",
+        "rank": 2,
+        "discovery_index": 9,
+        "p_true_winning": 0.46623,
+        "p_true_losing": 0.4001
+      },
+      "20d40e4446d30fd1": {
+        "source_sha256": "20d40e4446d30fd1f113a5d6abbd48d09c33b888ec3d0280ca3cfd871765ce1d",
+        "rank": 3,
+        "discovery_index": 20,
+        "p_true_winning": 0.38081,
+        "p_true_losing": 0.31839
+      },
+      "a266a3eb55582b1c": {
+        "source_sha256": "a266a3eb55582b1cabbe3684fdc018122400114f1cd231b52a6c5f61ef43ec32",
+        "rank": 4,
+        "discovery_index": 16,
+        "p_true_winning": 0.45547,
+        "p_true_losing": 0.40041
+      },
+      "10427a2e1b51f0f9": {
+        "source_sha256": "10427a2e1b51f0f9af33c9778fad6a5ddb50637cc121efb3454a6a1124d8b362",
+        "rank": 5,
+        "discovery_index": 29,
+        "p_true_winning": 0.45145,
+        "p_true_losing": 0.39747
+      },
+      "0d443bd0bb3ef8f9": {
+        "source_sha256": "0d443bd0bb3ef8f99713515df84208a7abf6033c5752e0998c45d3c41ecff5d1",
+        "rank": 6,
+        "discovery_index": 6,
+        "p_true_winning": 0.46186,
+        "p_true_losing": 0.41448
+      },
+      "582f4b573723ea61": {
+        "source_sha256": "582f4b573723ea61d4189b69949d2bcd7a4b4cbbb52f362ef8990d13fe5c55df",
+        "rank": 7,
+        "discovery_index": 13,
+        "p_true_winning": 0.44412,
+        "p_true_losing": 0.39714
+      },
+      "558afb9eb8de3573": {
+        "source_sha256": "558afb9eb8de3573435cc3eb7175f8c964d833434c9702c1e214ef5a0015de01",
+        "rank": 8,
+        "discovery_index": 5,
+        "p_true_winning": 0.44074,
+        "p_true_losing": 0.39444
+      },
+      "20fe9040e5eb90a7": {
+        "source_sha256": "20fe9040e5eb90a7f11956cb94f6c6bbb35531690e8af5a8ccb0d706e5b9c7c0",
+        "rank": 9,
+        "discovery_index": 12,
+        "p_true_winning": 0.44921,
+        "p_true_losing": 0.40803
+      },
+      "eb1e7dc1de4c5084": {
+        "source_sha256": "eb1e7dc1de4c50844dc4ba393b4bffde25a912433f573ec172cf566a5a13e3e6",
+        "rank": 10,
+        "discovery_index": 21,
+        "p_true_winning": 0.36427,
+        "p_true_losing": 0.32512
+      },
+      "41c6f124aa40f039": {
+        "source_sha256": "41c6f124aa40f0399b1b2d21e4523431fa0498cb45d4706a0060930a971213c9",
+        "rank": 11,
+        "discovery_index": 4,
+        "p_true_winning": 0.45464,
+        "p_true_losing": 0.41635
+      },
+      "d28242de0339fa84": {
+        "source_sha256": "d28242de0339fa84358ee6e7d0e4ce31c8ad1a5dafb20ff3c560ba52c19e58cd",
+        "rank": 12,
+        "discovery_index": 18,
+        "p_true_winning": 0.41756,
+        "p_true_losing": 0.37953
+      },
+      "7918a4ea7d782279": {
+        "source_sha256": "7918a4ea7d782279c252061c41edf2e53ec777e9a8982279d0e646d06723d508",
+        "rank": 13,
+        "discovery_index": 22,
+        "p_true_winning": 0.44809,
+        "p_true_losing": 0.4113
+      },
+      "580e3d342bc7f6e7": {
+        "source_sha256": "580e3d342bc7f6e762411704a13d3726eb472b6d1859d6efe8b9caa7f8cb1ed7",
+        "rank": 14,
+        "discovery_index": 30,
+        "p_true_winning": 0.45852,
+        "p_true_losing": 0.42386
+      },
+      "719612e3f1a814d4": {
+        "source_sha256": "719612e3f1a814d4606ed156fc6bde32cfa6e68eb987d58971e97f497b946239",
+        "rank": 15,
+        "discovery_index": 25,
+        "p_true_winning": 0.43974,
+        "p_true_losing": 0.40711
+      },
+      "37a3649c24caf0de": {
+        "source_sha256": "37a3649c24caf0deb3aca4ec18425e0c608b0c4ab1c94921f7b48730fff3ec0d",
+        "rank": 16,
+        "discovery_index": 23,
+        "p_true_winning": 0.45607,
+        "p_true_losing": 0.4235
+      },
+      "555411e7ce7a6443": {
+        "source_sha256": "555411e7ce7a644383ddadd2d49bdf9fb3bc84bc6ce6a69cbd63fe48b7dcb22a",
+        "rank": 17,
+        "discovery_index": 27,
+        "p_true_winning": 0.38259,
+        "p_true_losing": 0.35104
+      },
+      "ce5fdae6c5c59534": {
+        "source_sha256": "ce5fdae6c5c595340c433c665211a4cd15bf4d5f588ccdc86f4e121a68562b7d",
+        "rank": 18,
+        "discovery_index": 14,
+        "p_true_winning": 0.42836,
+        "p_true_losing": 0.39777
+      },
+      "ca86f27588e5bb82": {
+        "source_sha256": "ca86f27588e5bb8256209bae1ad75a7678cb8cebe2a138a43477b5b2afa905db",
+        "rank": 19,
+        "discovery_index": 2,
+        "p_true_winning": 0.43936,
+        "p_true_losing": 0.40918
+      },
+      "f433cd96972554d0": {
+        "source_sha256": "f433cd96972554d06ef54217091c1fce08a20497d3fbab9baa43852f4d9ab02f",
+        "rank": 20,
+        "discovery_index": 28,
+        "p_true_winning": 0.46999,
+        "p_true_losing": 0.44156
+      },
+      "54b6e367407a928e": {
+        "source_sha256": "54b6e367407a928e3c3e74a6433ee979df0d1ae351185ee4f77a3f65dab86804",
+        "rank": 21,
+        "discovery_index": 24,
+        "p_true_winning": 0.4256,
+        "p_true_losing": 0.39894
+      },
+      "942b9e981e759a91": {
+        "source_sha256": "942b9e981e759a919e35c3688ceaa8c72a98e34b8ee90d594bf2f7709f517f2b",
+        "rank": 22,
+        "discovery_index": 17,
+        "p_true_winning": 0.46,
+        "p_true_losing": 0.43603
+      },
+      "9e8b7ee73c4a292e": {
+        "source_sha256": "9e8b7ee73c4a292e93cf1d076d0ec44a8dcad403437e8bc84248dc9cd75bfeb7",
+        "rank": 23,
+        "discovery_index": 7,
+        "p_true_winning": 0.46032,
+        "p_true_losing": 0.437
+      },
+      "46833dcbb71181b6": {
+        "source_sha256": "46833dcbb71181b6100ef072aeb0adffc8e567b69d677c7bafa1900558bb9577",
+        "rank": 24,
+        "discovery_index": 11,
+        "p_true_winning": 0.4541,
+        "p_true_losing": 0.43097
+      },
+      "b658c48ba1072a6d": {
+        "source_sha256": "b658c48ba1072a6d7594e6b26cbf02338c0690bf25dbb4fcc54232ca35e18969",
+        "rank": 25,
+        "discovery_index": 1,
+        "p_true_winning": 0.45528,
+        "p_true_losing": 0.43636
+      },
+      "119cba71feac8e27": {
+        "source_sha256": "119cba71feac8e27b174fb75e752817b2408c9a17e19994c5b143d67b6a5c6d9",
+        "rank": 26,
+        "discovery_index": 3,
+        "p_true_winning": 0.38693,
+        "p_true_losing": 0.36852
+      },
+      "cb8c1b09001d0af0": {
+        "source_sha256": "cb8c1b09001d0af02543f1f102336455ad06a9d7ae0fb1394bf4aaab8bbf9681",
+        "rank": 27,
+        "discovery_index": 10,
+        "p_true_winning": 0.51838,
+        "p_true_losing": 0.50057
+      },
+      "a6d632cb7eb8a08e": {
+        "source_sha256": "a6d632cb7eb8a08eef240a5d6fa6814e7379ab09258b3d416544f991c37e7df0",
+        "rank": 28,
+        "discovery_index": 15,
+        "p_true_winning": 0.41535,
+        "p_true_losing": 0.39947
+      },
+      "66f3417d81e788e8": {
+        "source_sha256": "66f3417d81e788e83fd04c05a0afdec06bed42e0031f9d64679cbafc326d9513",
+        "rank": 29,
+        "discovery_index": 26,
+        "p_true_winning": 0.4186,
+        "p_true_losing": 0.40472
+      },
+      "b86bd254aa079897": {
+        "source_sha256": "b86bd254aa079897a6b59d6be45688f9ecd29782aff23bb283cefe47109d65e5",
+        "rank": 30,
+        "discovery_index": 8,
+        "p_true_winning": 0.42622,
+        "p_true_losing": 0.41486
+      },
+      "beb7172d8d81659e": {
+        "source_sha256": "beb7172d8d81659e6aa48a2e190bc981efd830fe597af36ca6326d8d5af54831",
+        "rank": 31,
+        "discovery_index": 19,
+        "p_true_winning": 0.42622,
+        "p_true_losing": 0.41506
+      }
+    }
+  }
+}

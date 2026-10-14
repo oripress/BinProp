@@ -1,0 +1,12 @@
+include README.md LICENSE CITATION.cff .env.example
+recursive-include docs *.md *.png *.svg
+recursive-include examples *.py *.json
+recursive-include tests *.py
+recursive-include src/binary_properties/motifs *.json
+prune data
+prune datasets
+prune runs
+prune artifacts
+exclude .env
+
+recursive-include experiments *.py *.txt *.json *.md

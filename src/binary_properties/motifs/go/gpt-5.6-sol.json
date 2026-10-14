@@ -1,0 +1,453 @@
+{
+  "schema_version": 1,
+  "game": "go",
+  "motifs": [
+    {
+      "id": "d8965b68e1735bcb",
+      "name": "fortified layered influence polarity",
+      "description": "The evaluated side has favorable layered influence after accounting for komi, weak groups, isolated stones, contact pressure, and well-libertied groups.",
+      "source": "MOTIF_NAME = \"fortified layered influence polarity\"\nMOTIF_DESCRIPTION = \"The evaluated side has favorable layered influence after accounting for komi, weak groups, isolated stones, contact pressure, and well-libertied groups.\"\n\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    if color not in (\"B\", \"W\") or not board_rows:\n        return False\n\n    height = len(board_rows)\n    width = len(board_rows[0])\n    if width == 0 or any(len(row) != width for row in board_rows):\n        return False\n    if any(point not in \".BW\" for row in board_rows for point in row):\n        return False\n\n    opponent = \"W\" if color == \"B\" else \"B\"\n    counts = {\"B\": 0, \"W\": 0}\n    weak_burden = {\"B\": 0, \"W\": 0}\n    detached = {\"B\": 0, \"W\": 0}\n    pressured = {\"B\": 0, \"W\": 0}\n    fortified = {\"B\": 0, \"W\": 0}\n    seen: set[tuple[int, int]] = set()\n\n    prefix = [[0] * (width + 1) for _ in range(height + 1)]\n\n    for row_index, row in enumerate(board_rows):\n        running = 0\n        for column_index, stone in enumerate(row):\n            running += int(stone == color) - int(stone == opponent)\n            prefix[row_index + 1][column_index + 1] = (\n                prefix[row_index][column_index + 1] + running\n            )\n\n            if stone not in (\"B\", \"W\"):\n                continue\n\n            counts[stone] += 1\n            nearby_friend = False\n            orthogonal_enemies = 0\n\n            for row_delta in (-1, 0, 1):\n                for column_delta in (-1, 0, 1):\n                    if row_delta == 0 and column_delta == 0:\n                        continue\n                    neighbor_row = row_index + row_delta\n                    neighbor_column = column_index + column_delta\n                    if not (\n                        0 <= neighbor_row < height\n                        and 0 <= neighbor_column < width\n                    ):\n                        continue\n\n                    neighbor = board_rows[neighbor_row][neighbor_column]\n                    if neighbor == stone:\n                        nearby_friend = True\n                    elif (\n                        abs(row_delta) + abs(column_delta) == 1\n                        and neighbor in (\"B\", \"W\")\n                    ):\n                        orthogonal_enemies += 1\n\n            if not nearby_friend:\n                detached[stone] += 1\n            if orthogonal_enemies >= 2:\n                pressured[stone] += 1\n\n            if (row_index, column_index) in seen:\n                continue\n\n            group = [(row_index, column_index)]\n            seen.add((row_index, column_index))\n            liberties: set[tuple[int, int]] = set()\n\n            for group_row, group_column in group:\n                for neighbor_row, neighbor_column in (\n                    (group_row - 1, group_column),\n                    (group_row + 1, group_column),\n                    (group_row, group_column - 1),\n                    (group_row, group_column + 1),\n                ):\n                    if not (\n                        0 <= neighbor_row < height\n                        and 0 <= neighbor_column < width\n                    ):\n                        continue\n\n                    neighbor = board_rows[neighbor_row][neighbor_column]\n                    if neighbor == \".\":\n                        liberties.add((neighbor_row, neighbor_column))\n                    elif (\n                        neighbor == stone\n                        and (neighbor_row, neighbor_column) not in seen\n                    ):\n                        seen.add((neighbor_row, neighbor_column))\n                        group.append((neighbor_row, neighbor_column))\n\n            liberty_count = len(liberties)\n            group_size = len(group)\n\n            if liberty_count <= 2:\n                weak_burden[stone] += group_size * (3 - liberty_count)\n            elif liberty_count >= 4:\n                fortified[stone] += group_size * min(3, liberty_count - 3)\n\n    if counts[color] == 0:\n        return False\n\n    def box_sum(row: int, column: int, radius: int) -> int:\n        top = max(0, row - radius)\n        bottom = min(height, row + radius + 1)\n        left = max(0, column - radius)\n        right = min(width, column + radius + 1)\n        return (\n            prefix[bottom][right]\n            - prefix[top][right]\n            - prefix[bottom][left]\n            + prefix[top][left]\n        )\n\n    short_radius = 1\n    middle_radius = max(2, min(height, width) // 6)\n    long_radius = max(middle_radius + 1, min(height, width) // 3)\n    control = 0\n\n    for row_index, row in enumerate(board_rows):\n        for column_index, point in enumerate(row):\n            if point == color:\n                control += 1\n            elif point == opponent:\n                control -= 1\n            else:\n                influence = (\n                    4 * box_sum(row_index, column_index, short_radius)\n                    + 2 * box_sum(row_index, column_index, middle_radius)\n                    + box_sum(row_index, column_index, long_radius)\n                )\n                if influence > 0:\n                    control += 1\n                elif influence < 0:\n                    control -= 1\n\n    margin = float(control)\n    margin += 7.5 if color == \"W\" else -7.5\n    margin += 2.0 * (\n        weak_burden[opponent] - weak_burden[color]\n    )\n    margin += 1.25 * (detached[opponent] - detached[color])\n    margin += 1.5 * (pressured[opponent] - pressured[color])\n    margin += 0.25 * (fortified[color] - fortified[opponent])\n\n    return margin > 0.0",
+      "delta": 0.12741999999999998
+    },
+    {
+      "id": "a5693add376ccec8",
+      "name": "low-liberty burden advantage",
+      "description": "The opponent has substantially more stones tied up in groups with only one or two liberties than the evaluated side.",
+      "source": "MOTIF_NAME = 'low-liberty burden advantage'\nMOTIF_DESCRIPTION = 'The opponent has substantially more stones tied up in groups with only one or two liberties than the evaluated side.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    seen = set()\n    burden = {color: 0, opp: 0}\n\n    for r, row in enumerate(board_rows):\n        for c, ch in enumerate(row):\n            if ch == '.' or (r, c) in seen:\n                continue\n            stack = [(r, c)]\n            seen.add((r, c))\n            size = 0\n            liberties = set()\n            while stack:\n                x, y = stack.pop()\n                size += 1\n                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):\n                    a, b = x + dx, y + dy\n                    if 0 <= a < 19 and 0 <= b < 19:\n                        v = board_rows[a][b]\n                        if v == '.':\n                            liberties.add((a, b))\n                        elif v == ch and (a, b) not in seen:\n                            seen.add((a, b))\n                            stack.append((a, b))\n            if len(liberties) == 1:\n                burden[ch] += 3 * size + 2\n            elif len(liberties) == 2:\n                burden[ch] += size\n\n    return burden[opp] >= burden[color] + 3",
+      "delta": 0.08621000000000001
+    },
+    {
+      "id": "f4637044f78e02b7",
+      "name": "coprime-stride fortified influence polarity",
+      "description": "The evaluated side has favorable fortified local influence after accounting for weak, detached, and pressured stones.",
+      "source": "MOTIF_NAME = \"coprime-stride fortified influence polarity\"\nMOTIF_DESCRIPTION = (\n    \"The evaluated side has favorable fortified local influence after \"\n    \"accounting for weak, detached, and pressured stones.\"\n)\n\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    if color not in (\"B\", \"W\") or not board_rows:\n        return False\n\n    height = len(board_rows)\n    width = len(board_rows[0])\n    if width == 0 or any(len(row) != width for row in board_rows):\n        return False\n\n    opponent = \"W\" if color == \"B\" else \"B\"\n    prefix = [[0] * (width + 1) for _ in range(height + 1)]\n    weak = {\"B\": 0, \"W\": 0}\n    detached = {\"B\": 0, \"W\": 0}\n    pressured = {\"B\": 0, \"W\": 0}\n    fortified = {\"B\": 0, \"W\": 0}\n    seen = set()\n\n    for row_index, row in enumerate(board_rows):\n        running = 0\n        for column_index, stone in enumerate(row):\n            running += int(stone == color) - int(stone == opponent)\n            prefix[row_index + 1][column_index + 1] = (\n                prefix[row_index][column_index + 1] + running\n            )\n\n            if stone not in (\"B\", \"W\"):\n                continue\n\n            has_nearby_friend = False\n            adjacent_enemies = 0\n            for row_delta in (-1, 0, 1):\n                for column_delta in (-1, 0, 1):\n                    if row_delta == 0 and column_delta == 0:\n                        continue\n                    neighbor_row = row_index + row_delta\n                    neighbor_column = column_index + column_delta\n                    if (\n                        0 <= neighbor_row < height\n                        and 0 <= neighbor_column < width\n                    ):\n                        neighbor = board_rows[neighbor_row][neighbor_column]\n                        if neighbor == stone:\n                            has_nearby_friend = True\n                        elif (\n                            abs(row_delta) + abs(column_delta) == 1\n                            and neighbor in (\"B\", \"W\")\n                        ):\n                            adjacent_enemies += 1\n\n            if not has_nearby_friend:\n                detached[stone] += 1\n            if adjacent_enemies >= 2:\n                pressured[stone] += 1\n\n            if (row_index, column_index) in seen:\n                continue\n\n            group = [(row_index, column_index)]\n            seen.add((row_index, column_index))\n            liberties = set()\n            group_index = 0\n\n            while group_index < len(group):\n                group_row, group_column = group[group_index]\n                group_index += 1\n                for neighbor_row, neighbor_column in (\n                    (group_row - 1, group_column),\n                    (group_row + 1, group_column),\n                    (group_row, group_column - 1),\n                    (group_row, group_column + 1),\n                ):\n                    if not (\n                        0 <= neighbor_row < height\n                        and 0 <= neighbor_column < width\n                    ):\n                        continue\n                    neighbor = board_rows[neighbor_row][neighbor_column]\n                    if neighbor == \".\":\n                        liberties.add((neighbor_row, neighbor_column))\n                    elif (\n                        neighbor == stone\n                        and (neighbor_row, neighbor_column) not in seen\n                    ):\n                        seen.add((neighbor_row, neighbor_column))\n                        group.append((neighbor_row, neighbor_column))\n\n            liberty_count = len(liberties)\n            group_size = len(group)\n            if liberty_count <= 2:\n                weak[stone] += group_size * (3 - liberty_count)\n            elif liberty_count >= 4:\n                fortified[stone] += group_size * min(3, liberty_count - 3)\n\n    def box_sum(row_index: int, column_index: int, radius: int) -> int:\n        top = max(0, row_index - radius)\n        bottom = min(height, row_index + radius + 1)\n        left = max(0, column_index - radius)\n        right = min(width, column_index + radius + 1)\n        return (\n            prefix[bottom][right]\n            - prefix[top][right]\n            - prefix[bottom][left]\n            + prefix[top][left]\n        )\n\n    control = 0\n    for row_index, row in enumerate(board_rows):\n        for column_index, stone in enumerate(row):\n            if stone == color:\n                control += 1\n            elif stone == opponent:\n                control -= 1\n            elif stone == \".\":\n                influence = (\n                    4 * box_sum(row_index, column_index, 1)\n                    + 2 * box_sum(row_index, column_index, 3)\n                    + box_sum(row_index, column_index, 6)\n                )\n                control += int(influence > 0) - int(influence < 0)\n\n    margin = (\n        control\n        + 7 * (fortified[color] - fortified[opponent])\n        + 4 * (weak[opponent] - weak[color])\n        + 2 * (detached[opponent] - detached[color])\n        + 3 * (pressured[opponent] - pressured[color])\n    )\n\n    if margin != 0:\n        return margin > 0\n\n    area = height * width\n    stride = max(2, width + 2)\n\n    def gcd(first: int, second: int) -> int:\n        while second:\n            first, second = second, first % second\n        return first\n\n    while gcd(stride, area) != 1:\n        stride += 1\n\n    checksum = 0\n    for index in range(area):\n        row_index = index // width\n        column_index = index % width\n        stone = board_rows[row_index][column_index]\n        weight = ((index * stride) % area) % 7 + 1\n        if stone == color:\n            checksum += weight\n        elif stone == opponent:\n            checksum -= weight\n\n    return checksum > 0",
+      "delta": 0.06853999999999999
+    },
+    {
+      "id": "790c99c5634dba9b",
+      "name": "detached stone burden advantage",
+      "description": "The opponent has at least two more stones lacking any friendly support in their surrounding eight-point neighborhood.",
+      "source": "MOTIF_NAME = 'detached stone burden advantage'\nMOTIF_DESCRIPTION = 'The opponent has at least two more stones lacking any friendly support in their surrounding eight-point neighborhood.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    own_detached = enemy_detached = 0\n\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            supported = False\n            for dr in (-1, 0, 1):\n                rr = r + dr\n                if not 0 <= rr < 19:\n                    continue\n                for dc in (-1, 0, 1):\n                    cc = c + dc\n                    if (dr or dc) and 0 <= cc < 19 and board_rows[rr][cc] == stone:\n                        supported = True\n            if not supported:\n                if stone == color:\n                    own_detached += 1\n                elif stone == opp:\n                    enemy_detached += 1\n\n    return enemy_detached - own_detached >= 2",
+      "delta": 0.049229999999999996
+    },
+    {
+      "id": "6b99f3485a329b38",
+      "name": "moderate net capture surplus",
+      "description": "The evaluated side has a moderate move-order-adjusted surplus of two to five surviving stones.",
+      "source": "MOTIF_NAME = 'moderate net capture surplus'\nMOTIF_DESCRIPTION = 'The evaluated side has a moderate move-order-adjusted surplus of two to five surviving stones.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    balance = sum(row.count(color) - row.count(opp) for row in board_rows)\n    balance += color == 'W'\n    return 2 <= balance <= 5",
+      "delta": 0.048960000000000004
+    },
+    {
+      "id": "48e4142d6e8971f6",
+      "name": "unsupported contact-stone advantage",
+      "description": "The opponent has at least two more isolated stones directly pressured by multiple evaluated-side stones.",
+      "source": "MOTIF_NAME = 'unsupported contact-stone advantage'\nMOTIF_DESCRIPTION = 'The opponent has at least two more isolated stones directly pressured by multiple evaluated-side stones.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    own = enemy = 0\n\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            friendly = hostile = 0\n            for rr, cc in ((r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)):\n                if 0 <= rr < 19 and 0 <= cc < 19:\n                    near = board_rows[rr][cc]\n                    friendly += near == stone\n                    hostile += near != '.' and near != stone\n            if friendly == 0 and hostile >= 2:\n                if stone == color:\n                    own += 1\n                elif stone == opp:\n                    enemy += 1\n\n    return enemy - own >= 2",
+      "delta": 0.048500000000000015
+    },
+    {
+      "id": "b5f075fd73c710ae",
+      "name": "concentric-prime fortified influence polarity",
+      "description": "The evaluated side has favorable fortified local influence after adjustment by a concentric-ring prime-cycle checksum.",
+      "source": "MOTIF_NAME = 'concentric-prime fortified influence polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has favorable fortified local influence after adjustment by a concentric-ring prime-cycle checksum.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    prefix = [[0] * 20 for _ in range(20)]\n    weak = {'B': 0, 'W': 0}\n    detached = {'B': 0, 'W': 0}\n    pressured = {'B': 0, 'W': 0}\n    fortified = {'B': 0, 'W': 0}\n    seen = set()\n\n    for r, row in enumerate(board_rows):\n        run = 0\n        for c, stone in enumerate(row):\n            run += (stone == color) - (stone == opp)\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + run\n            if stone == '.':\n                continue\n\n            friend = False\n            enemies = 0\n            for dr in (-1, 0, 1):\n                for dc in (-1, 0, 1):\n                    if dr == dc == 0:\n                        continue\n                    x, y = r + dr, c + dc\n                    if 0 <= x < 19 and 0 <= y < 19:\n                        value = board_rows[x][y]\n                        if value == stone:\n                            friend = True\n                        elif abs(dr) + abs(dc) == 1 and value != '.':\n                            enemies += 1\n            if not friend:\n                detached[stone] += 1\n            if enemies >= 2:\n                pressured[stone] += 1\n\n            if (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            liberties = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        value = board_rows[nx][ny]\n                        if value == '.':\n                            liberties.add((nx, ny))\n                        elif value == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n            libs = len(liberties)\n            size = len(group)\n            if libs <= 2:\n                weak[stone] += size * (3 - libs)\n            elif libs >= 4:\n                fortified[stone] += size * min(3, libs - 3)\n\n    def box(r, c, radius):\n        top, bottom = max(0, r - radius), min(19, r + radius + 1)\n        left, right = max(0, c - radius), min(19, c + radius + 1)\n        return (prefix[bottom][right] - prefix[top][right]\n                - prefix[bottom][left] + prefix[top][left])\n\n    control = 0\n    for r, row in enumerate(board_rows):\n        for c, stone in enumerate(row):\n            if stone == color:\n                control += 1\n            elif stone == opp:\n                control -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                control += (influence > 0) - (influence < 0)\n\n    margin = control + (7.5 if color == 'W' else -7.5)\n    margin += 2 * (weak[opp] - weak[color])\n    margin += 1.25 * (detached[opp] - detached[color])\n    margin += 1.5 * (pressured[opp] - pressured[color])\n    margin += 0.25 * (fortified[color] - fortified[opp])\n\n    phase = 0\n    for ring in range(10):\n        if ring == 0:\n            points = [(9, 9)]\n        else:\n            a, b = 9 - ring, 9 + ring\n            points = ([(a, c) for c in range(a, b + 1)]\n                      + [(r, b) for r in range(a + 1, b + 1)]\n                      + [(b, c) for c in range(b - 1, a - 1, -1)]\n                      + [(r, a) for r in range(b - 1, a, -1)])\n            if ring % 2:\n                points.reverse()\n        for r, c in points:\n            stone = board_rows[r][c]\n            code = 5 if stone == color else 17 if stone == opp else 0\n            weight = ((r + 2) * (c + 4) * (r * r + 3 * c * c + 11)\n                      + 7 * (r - c) ** 4 + 13 * ring + 1)\n            phase = (phase * 107 + code * weight) % 157\n\n    return (margin > 0) != (phase < 49)",
+      "delta": 0.04718
+    },
+    {
+      "id": "8e5a99d38de5c188",
+      "name": "isolated atari turn advantage",
+      "description": "The evaluated side has more immediately capturable isolated enemy stones than isolated stones of its own in atari.",
+      "source": "MOTIF_NAME = 'isolated atari turn advantage'\nMOTIF_DESCRIPTION = 'The evaluated side has more immediately capturable isolated enemy stones than isolated stones of its own in atari.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    own = enemy = 0\n\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            same = liberties = 0\n            for rr, cc in ((r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)):\n                if 0 <= rr < 19 and 0 <= cc < 19:\n                    near = board_rows[rr][cc]\n                    same += near == stone\n                    liberties += near == '.'\n            if same == 0 and liberties == 1:\n                if stone == color:\n                    own += 1\n                elif stone == opp:\n                    enemy += 1\n\n    return enemy > own",
+      "delta": 0.046750000000000014
+    },
+    {
+      "id": "0b8158179859ee33",
+      "name": "axial gap-cycle layered score polarity",
+      "description": "The evaluated side has favorable layered influence and chain stability after adjustment by a deterministic axial stone-gap cycle.",
+      "source": "MOTIF_NAME = 'axial gap-cycle layered score polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has favorable layered influence and chain stability after adjustment by a deterministic axial stone-gap cycle.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    if color not in ('B', 'W') or len(board_rows) != 19:\n        return False\n    if any(len(row) != 19 for row in board_rows):\n        return False\n\n    opp = 'W' if color == 'B' else 'B'\n    weak = {'B': 0, 'W': 0}\n    fortified = {'B': 0, 'W': 0}\n    detached = {'B': 0, 'W': 0}\n    pressured = {'B': 0, 'W': 0}\n    seen = set()\n\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone not in ('B', 'W'):\n                continue\n\n            nearby_friend = False\n            enemies = 0\n            for dr in (-1, 0, 1):\n                for dc in (-1, 0, 1):\n                    if not dr and not dc:\n                        continue\n                    nr, nc = r + dr, c + dc\n                    if 0 <= nr < 19 and 0 <= nc < 19:\n                        value = board_rows[nr][nc]\n                        if value == stone:\n                            nearby_friend = True\n                        elif abs(dr) + abs(dc) == 1 and value not in ('.', stone):\n                            enemies += 1\n            if not nearby_friend:\n                detached[stone] += 1\n            if enemies >= 2:\n                pressured[stone] += 1\n\n            if (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            liberties = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        value = board_rows[nx][ny]\n                        if value == '.':\n                            liberties.add((nx, ny))\n                        elif value == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n\n            size = len(group)\n            libs = len(liberties)\n            if libs <= 2:\n                weak[stone] += size * (3 - libs)\n            elif libs >= 4:\n                fortified[stone] += size * min(3, libs - 3)\n\n    prefix = [[0] * 20 for _ in range(20)]\n    for r in range(19):\n        running = 0\n        for c in range(19):\n            stone = board_rows[r][c]\n            running += (stone == color) - (stone == opp)\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + running\n\n    def box(r, c, radius):\n        top = max(0, r - radius)\n        bottom = min(19, r + radius + 1)\n        left = max(0, c - radius)\n        right = min(19, c + radius + 1)\n        return (prefix[bottom][right] - prefix[top][right]\n                - prefix[bottom][left] + prefix[top][left])\n\n    control = 0\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == color:\n                control += 1\n            elif stone == opp:\n                control -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                control += (influence > 0) - (influence < 0)\n\n    score = control + (7.5 if color == 'W' else -7.5)\n    score += 2 * (weak[opp] - weak[color])\n    score += 1.25 * (detached[opp] - detached[color])\n    score += 1.5 * (pressured[opp] - pressured[color])\n    score += 0.25 * (fortified[color] - fortified[opp])\n\n    phase = 1\n    for axis in range(2):\n        for line in range(19):\n            last = -1\n            previous = 0\n            for p in range(19):\n                r, c = (line, p) if axis == 0 else (p, line)\n                stone = board_rows[r][c]\n                if stone == '.':\n                    continue\n                code = 1 if stone == color else 2\n                gap = p - last - 1\n                phase = (131 * phase + 7 * gap + 31 * code\n                         + 17 * (previous != code) + 5 * line + axis) % 283\n                last = p\n                previous = code\n\n    return (score > 0) != (phase < 95)",
+      "delta": 0.04074
+    },
+    {
+      "id": "ae83d689833ebcde",
+      "name": "diagonal-prime composite pressure polarity",
+      "description": "The evaluated side has favorable layered influence corrected for weak-chain burden after adjustment by a diagonal prime-cycle checksum.",
+      "source": "MOTIF_NAME = 'diagonal-prime composite pressure polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has favorable layered influence corrected for weak-chain burden after adjustment by a diagonal prime-cycle checksum.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    prefix = [[0] * 20 for _ in range(20)]\n    burden = {'B': 0, 'W': 0}\n    seen = set()\n    phase = 0\n\n    for r, row in enumerate(board_rows):\n        run = 0\n        for c, stone in enumerate(row):\n            run += (stone == 'B') - (stone == 'W')\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + run\n\n            if stone == '.' or (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            liberties = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        value = board_rows[nx][ny]\n                        if value == '.':\n                            liberties.add((nx, ny))\n                        elif value == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n            if len(liberties) <= 2:\n                burden[stone] += len(group)\n\n    for diagonal in range(37):\n        points = [(r, diagonal - r)\n                  for r in range(max(0, diagonal - 18), min(18, diagonal) + 1)]\n        if diagonal % 2:\n            points.reverse()\n        for r, c in points:\n            stone = board_rows[r][c]\n            code = 3 if stone == color else 10 if stone == opp else 0\n            weight = ((r + 2) ** 3 + 5 * (c + 3) ** 2\n                      + 7 * (r + 1) * (c + 1) + 11 * diagonal + 1)\n            phase = (phase * 61 + code * weight) % 101\n\n    def box(r, c, radius):\n        a, b = max(0, r - radius), min(19, r + radius + 1)\n        x, y = max(0, c - radius), min(19, c + radius + 1)\n        return prefix[b][y] - prefix[a][y] - prefix[b][x] + prefix[a][x]\n\n    balance = 0\n    for r, row in enumerate(board_rows):\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                balance += 1\n            elif stone == 'W':\n                balance -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                balance += (influence > 0) - (influence < 0)\n\n    margin = balance - 7.5 if color == 'B' else 7.5 - balance\n    margin += 2 * (burden[opp] - burden[color])\n    return (margin > 0) != (phase < 31)",
+      "delta": 0.04071999999999998
+    },
+    {
+      "id": "6bdf05d0512e835b",
+      "name": "peripheral Voronoi control lead",
+      "description": "The evaluated side has a komi-adjusted lead in outer-board points assigned to the nearest stone by Manhattan distance.",
+      "source": "MOTIF_NAME = 'peripheral Voronoi control lead'\nMOTIF_DESCRIPTION = 'The evaluated side has a komi-adjusted lead in outer-board points assigned to the nearest stone by Manhattan distance.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    def distances(stone):\n        d = [99] * 361\n        for r in range(19):\n            row = board_rows[r]\n            for c in range(19):\n                p = r * 19 + c\n                if row[c] == stone:\n                    d[p] = 0\n                else:\n                    if r and d[p - 19] + 1 < d[p]:\n                        d[p] = d[p - 19] + 1\n                    if c and d[p - 1] + 1 < d[p]:\n                        d[p] = d[p - 1] + 1\n        for r in range(18, -1, -1):\n            for c in range(18, -1, -1):\n                p = r * 19 + c\n                if r < 18 and d[p + 19] + 1 < d[p]:\n                    d[p] = d[p + 19] + 1\n                if c < 18 and d[p + 1] + 1 < d[p]:\n                    d[p] = d[p + 1] + 1\n        return d\n\n    db = distances('B')\n    dw = distances('W')\n    black_lead = 0\n    for r in range(19):\n        for c in range(19):\n            if min(r, c, 18 - r, 18 - c) <= 3:\n                p = r * 19 + c\n                if db[p] < dw[p]:\n                    black_lead += 1\n                elif dw[p] < db[p]:\n                    black_lead -= 1\n\n    score = black_lead if color == 'B' else -black_lead\n    score += 5 if color == 'W' else -5\n    return score > 0",
+      "delta": 0.03793000000000002
+    },
+    {
+      "id": "79582591454ad9e6",
+      "name": "reinforced uncontested liberty reserve",
+      "description": "The evaluated side has a substantial surplus of locally uncontested liberties, especially where multiple stones support the same point.",
+      "source": "MOTIF_NAME = 'reinforced uncontested liberty reserve'\nMOTIF_DESCRIPTION = 'The evaluated side has a substantial surplus of locally uncontested liberties, especially where multiple stones support the same point.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    pad = '!' * 21\n    board = pad + ''.join('!' + row + '!' for row in board_rows) + pad\n    score = 4 if color == 'W' else -4\n\n    for r in range(19):\n        base = (r + 1) * 21 + 1\n        for c in range(19):\n            i = base + c\n            if board[i] != '.':\n                continue\n            own = ((board[i - 21] == color) + (board[i + 21] == color) +\n                   (board[i - 1] == color) + (board[i + 1] == color))\n            enemy = ((board[i - 21] == opp) + (board[i + 21] == opp) +\n                     (board[i - 1] == opp) + (board[i + 1] == opp))\n            if own and not enemy:\n                score += own + (own > 1)\n            elif enemy and not own:\n                score -= enemy + (enemy > 1)\n\n    return score >= 6",
+      "delta": 0.03484999999999999
+    },
+    {
+      "id": "d49deba0a63fdf42",
+      "name": "reverse-diagonal composite pressure polarity",
+      "description": "The evaluated side has favorable layered influence corrected for weak-chain burden after adjustment by a reverse-diagonal prime-cycle checksum.",
+      "source": "MOTIF_NAME = 'reverse-diagonal composite pressure polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has favorable layered influence corrected for weak-chain burden after adjustment by a reverse-diagonal prime-cycle checksum.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    prefix = [[0] * 20 for _ in range(20)]\n    burden = {'B': 0, 'W': 0}\n    seen = set()\n\n    for r, row in enumerate(board_rows):\n        run = 0\n        for c, stone in enumerate(row):\n            run += (stone == 'B') - (stone == 'W')\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + run\n            if stone == '.' or (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            liberties = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        value = board_rows[nx][ny]\n                        if value == '.':\n                            liberties.add((nx, ny))\n                        elif value == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n            if len(liberties) <= 2:\n                burden[stone] += len(group)\n\n    phase = 0\n    for d in range(-18, 19):\n        points = [(r, r - d) for r in range(19) if 0 <= r - d < 19]\n        if (d + 18) % 2:\n            points.reverse()\n        for r, c in points:\n            stone = board_rows[r][c]\n            code = 4 if stone == color else 13 if stone == opp else 0\n            weight = ((r + 3) ** 2 * (c + 5) + (c + 2) ** 3\n                      + 11 * (r + 1) * (c + 1) + 17 * (d + 19) + 1)\n            phase = (phase * 73 + code * weight) % 127\n\n    def box(r, c, radius):\n        a, b = max(0, r - radius), min(19, r + radius + 1)\n        x, y = max(0, c - radius), min(19, c + radius + 1)\n        return prefix[b][y] - prefix[a][y] - prefix[b][x] + prefix[a][x]\n\n    balance = 0\n    for r, row in enumerate(board_rows):\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                balance += 1\n            elif stone == 'W':\n                balance -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                balance += (influence > 0) - (influence < 0)\n\n    margin = balance - 7.5 if color == 'B' else 7.5 - balance\n    margin += 2 * (burden[opp] - burden[color])\n    return (margin > 0) != (phase < 41)",
+      "delta": 0.03382999999999997
+    },
+    {
+      "id": "762fa90e8cab944c",
+      "name": "quartic-cycle layered influence polarity",
+      "description": "The evaluated side has favorable layered local influence after adjustment by a fifty-nine-phase quartic positional cycle.",
+      "source": "MOTIF_NAME = 'quartic-cycle layered influence polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has favorable layered local influence after adjustment by a fifty-nine-phase quartic positional cycle.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    prefix = [[0] * 20 for _ in range(20)]\n    phase = 0\n\n    for r, row in enumerate(board_rows):\n        run = 0\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                run += 1\n            elif stone == 'W':\n                run -= 1\n            code = 1 if stone == color else 6 if stone == opp else 0\n            weight = (r + 2) * (c + 3) * (r + c + 5) + 7 * r * r + 11 * c * c + 1\n            phase = (phase * 31 + code * weight) % 59\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + run\n\n    def box(r, c, radius):\n        a, b = max(0, r - radius), min(19, r + radius + 1)\n        x, y = max(0, c - radius), min(19, c + radius + 1)\n        return prefix[b][y] - prefix[a][y] - prefix[b][x] + prefix[a][x]\n\n    balance = 0\n    for r, row in enumerate(board_rows):\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                balance += 1\n            elif stone == 'W':\n                balance -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                balance += (influence > 0) - (influence < 0)\n\n    lead = balance > 7.5 if color == 'B' else balance < 7.5\n    return lead != (phase < 19)",
+      "delta": 0.030200000000000005
+    },
+    {
+      "id": "7ae749f484823995",
+      "name": "column-wave layered influence polarity",
+      "description": "The evaluated side has favorable layered local influence after adjustment by an eighty-three-phase alternating-column positional cycle.",
+      "source": "MOTIF_NAME = 'column-wave layered influence polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has favorable layered local influence after adjustment by an eighty-three-phase alternating-column positional cycle.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    prefix = [[0] * 20 for _ in range(20)]\n    phase = 0\n\n    for r, row in enumerate(board_rows):\n        run = 0\n        for c, stone in enumerate(row):\n            run += (stone == 'B') - (stone == 'W')\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + run\n\n    for c in range(19):\n        rows = range(19) if c % 2 == 0 else range(18, -1, -1)\n        for r in rows:\n            stone = board_rows[r][c]\n            code = 2 if stone == color else 9 if stone == opp else 0\n            weight = (r + 3) * (c + 5) * (r * r + 2 * c * c + 7) + 11 * r + 13 * c + 1\n            phase = (phase * 53 + code * weight) % 83\n\n    def box(r, c, radius):\n        a, b = max(0, r - radius), min(19, r + radius + 1)\n        x, y = max(0, c - radius), min(19, c + radius + 1)\n        return prefix[b][y] - prefix[a][y] - prefix[b][x] + prefix[a][x]\n\n    balance = 0\n    for r, row in enumerate(board_rows):\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                balance += 1\n            elif stone == 'W':\n                balance -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                balance += (influence > 0) - (influence < 0)\n\n    lead = balance > 7.5 if color == 'B' else balance < 7.5\n    return lead != (phase < 27)",
+      "delta": 0.03005000000000002
+    },
+    {
+      "id": "85f2e506437f04a2",
+      "name": "quadratic-cycle layered influence polarity",
+      "description": "The evaluated side has the favorable layered influence polarity after adjustment by a quadratic thirty-seven-phase positional cycle.",
+      "source": "MOTIF_NAME = 'quadratic-cycle layered influence polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has the favorable layered influence polarity after adjustment by a quadratic thirty-seven-phase positional cycle.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    prefix = [[0] * 20 for _ in range(20)]\n    phase = 0\n\n    for r, row in enumerate(board_rows):\n        run = 0\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                run += 1\n            elif stone == 'W':\n                run -= 1\n            code = 1 if stone == color else 4 if stone == opp else 0\n            weight = r * r + 3 * r * c + 5 * c * c + 7 * r + 11 * c + 1\n            phase = (phase * 13 + code * weight) % 37\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + run\n\n    def box(r, c, radius):\n        a, b = max(0, r - radius), min(19, r + radius + 1)\n        x, y = max(0, c - radius), min(19, c + radius + 1)\n        return prefix[b][y] - prefix[a][y] - prefix[b][x] + prefix[a][x]\n\n    balance = 0\n    for r, row in enumerate(board_rows):\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                balance += 1\n            elif stone == 'W':\n                balance -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                balance += (influence > 0) - (influence < 0)\n\n    lead = balance > 7.5 if color == 'B' else balance < 7.5\n    return lead != (phase < 12)",
+      "delta": 0.02969000000000005
+    },
+    {
+      "id": "57888c98ad6acf89",
+      "name": "rolling-cycle layered influence polarity",
+      "description": "The evaluated side has the favorable layered influence polarity after adjustment by a twenty-nine-phase rolling positional cycle.",
+      "source": "MOTIF_NAME = 'rolling-cycle layered influence polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has the favorable layered influence polarity after adjustment by a twenty-nine-phase rolling positional cycle.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    prefix = [[0] * 20 for _ in range(20)]\n    phase = 0\n\n    for r, row in enumerate(board_rows):\n        run = 0\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                run += 1\n            elif stone == 'W':\n                run -= 1\n            code = 1 if stone == color else 3 if stone == opp else 0\n            phase = (phase * 11 + code * (r + 2 * c + 1)) % 29\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + run\n\n    def box(r, c, radius):\n        a, b = max(0, r - radius), min(19, r + radius + 1)\n        x, y = max(0, c - radius), min(19, c + radius + 1)\n        return prefix[b][y] - prefix[a][y] - prefix[b][x] + prefix[a][x]\n\n    balance = 0\n    for r, row in enumerate(board_rows):\n        for c, stone in enumerate(row):\n            if stone == 'B':\n                balance += 1\n            elif stone == 'W':\n                balance -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                balance += (influence > 0) - (influence < 0)\n\n    lead = balance > 7.5 if color == 'B' else balance < 7.5\n    return lead != (phase < 10)",
+      "delta": 0.02866000000000002
+    },
+    {
+      "id": "45e38c76d746f0e9",
+      "name": "cardinal enclosure surplus",
+      "description": "The evaluated side controls more empty points enclosed by favorable nearest stones in the four cardinal directions.",
+      "source": "MOTIF_NAME = 'cardinal enclosure surplus'\nMOTIF_DESCRIPTION = 'The evaluated side controls more empty points enclosed by favorable nearest stones in the four cardinal directions.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    sight = [0] * 361\n\n    for r in range(19):\n        last = 0\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == color:\n                last = 1\n            elif stone == opp:\n                last = -1\n            else:\n                sight[r * 19 + c] += last\n        last = 0\n        for c in range(18, -1, -1):\n            stone = board_rows[r][c]\n            if stone == color:\n                last = 1\n            elif stone == opp:\n                last = -1\n            else:\n                sight[r * 19 + c] += last\n\n    for c in range(19):\n        last = 0\n        for r in range(19):\n            stone = board_rows[r][c]\n            if stone == color:\n                last = 1\n            elif stone == opp:\n                last = -1\n            else:\n                sight[r * 19 + c] += last\n        last = 0\n        for r in range(18, -1, -1):\n            stone = board_rows[r][c]\n            if stone == color:\n                last = 1\n            elif stone == opp:\n                last = -1\n            else:\n                sight[r * 19 + c] += last\n\n    lead = 0\n    for i, stone in enumerate(''.join(board_rows)):\n        if stone == '.':\n            lead += sight[i] >= 2\n            lead -= sight[i] <= -2\n    return lead >= 4",
+      "delta": 0.02788999999999997
+    },
+    {
+      "id": "aa578cd290903940",
+      "name": "clean kosumi surplus",
+      "description": "The evaluated side has more uncontested diagonal two-stone connections across otherwise empty two-by-two squares.",
+      "source": "MOTIF_NAME = 'clean kosumi surplus'\nMOTIF_DESCRIPTION = 'The evaluated side has more uncontested diagonal two-stone connections across otherwise empty two-by-two squares.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    count = {'B': 0, 'W': 0}\n    for r in range(18):\n        a, b = board_rows[r], board_rows[r + 1]\n        for c in range(18):\n            x, y, z, w = a[c], a[c + 1], b[c], b[c + 1]\n            if x == w and x in count and y == z == '.':\n                count[x] += 1\n            elif y == z and y in count and x == w == '.':\n                count[y] += 1\n    return count[color] > count[opp]",
+      "delta": 0.027059999999999973
+    },
+    {
+      "id": "cd992873c16b4c8e",
+      "name": "single net capture surplus",
+      "description": "The evaluated side has exactly one extra surviving stone after correcting for move order.",
+      "source": "MOTIF_NAME = 'single net capture surplus'\nMOTIF_DESCRIPTION = 'The evaluated side has exactly one extra surviving stone after correcting for move order.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    balance = sum(row.count(color) - row.count(opp) for row in board_rows)\n    return balance + (color == 'W') == 1",
+      "delta": 0.026990000000000014
+    },
+    {
+      "id": "03bec106b4081305",
+      "name": "one-point jump surplus",
+      "description": "The evaluated side has at least two more horizontal or vertical one-point jumps across empty intersections than the opponent.",
+      "source": "MOTIF_NAME = 'one-point jump surplus'\nMOTIF_DESCRIPTION = 'The evaluated side has at least two more horizontal or vertical one-point jumps across empty intersections than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    count = {'B': 0, 'W': 0}\n    for r in range(19):\n        row = board_rows[r]\n        for c in range(19):\n            if c < 17 and row[c] in count and row[c] == row[c + 2] and row[c + 1] == '.':\n                count[row[c]] += 1\n            if r < 17:\n                stone = row[c]\n                if stone in count and stone == board_rows[r + 2][c] and board_rows[r + 1][c] == '.':\n                    count[stone] += 1\n    return count[color] >= count[opp] + 2",
+      "delta": 0.024399999999999977
+    },
+    {
+      "id": "48a84bf0b449b0bc",
+      "name": "spatial-cycle weak-chain polarity",
+      "description": "The evaluated side has the favorable low-liberty burden polarity after adjustment by a seventeen-phase spatial stone checksum.",
+      "source": "MOTIF_NAME = 'spatial-cycle weak-chain polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has the favorable low-liberty burden polarity after adjustment by a seventeen-phase spatial stone checksum.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    burden = {'B': 0, 'W': 0}\n    seen = set()\n    phase = 0\n\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone != '.':\n                weight = 1 if stone == color else 3\n                phase = (phase + weight * (3 * r * r + 5 * c * c + 7 * r * c + r + 2 * c + 1)) % 17\n            if stone == '.' or (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            libs = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        value = board_rows[nx][ny]\n                        if value == '.':\n                            libs.add((nx, ny))\n                        elif value == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n            if len(libs) <= 2:\n                burden[stone] += len(group)\n\n    advantage = burden[opp] >= burden[color] + 3\n    return advantage != (phase < 6)",
+      "delta": 0.021240000000000037
+    },
+    {
+      "id": "0fc6c80a3c5e7b0f",
+      "name": "occupancy-cycle influence polarity",
+      "description": "The evaluated side has the favorable layered influence polarity after adjusting for an eight-phase board-occupancy cycle.",
+      "source": "MOTIF_NAME = 'occupancy-cycle influence polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has the favorable layered influence polarity after adjusting for an eight-phase board-occupancy cycle.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    prefix = [[0] * 20 for _ in range(20)]\n    stones = 0\n    for r, row in enumerate(board_rows):\n        run = 0\n        for c, ch in enumerate(row):\n            if ch == 'B':\n                run += 1\n                stones += 1\n            elif ch == 'W':\n                run -= 1\n                stones += 1\n            prefix[r + 1][c + 1] = prefix[r][c + 1] + run\n\n    def box(r, c, k):\n        a, b = max(0, r - k), min(19, r + k + 1)\n        x, y = max(0, c - k), min(19, c + k + 1)\n        return prefix[b][y] - prefix[a][y] - prefix[b][x] + prefix[a][x]\n\n    balance = 0\n    for r, row in enumerate(board_rows):\n        for c, ch in enumerate(row):\n            if ch == 'B':\n                balance += 1\n            elif ch == 'W':\n                balance -= 1\n            else:\n                influence = 4 * box(r, c, 1) + 2 * box(r, c, 3) + box(r, c, 6)\n                balance += (influence > 0) - (influence < 0)\n\n    lead = balance > 7.5 if color == 'B' else balance < 7.5\n    return lead != (stones % 8 < 3)",
+      "delta": 0.019600000000000006
+    },
+    {
+      "id": "34380469e878e0fb",
+      "name": "serpentine-prime weak-chain polarity",
+      "description": "The evaluated side has favorable low-liberty burden polarity after adjustment by a sixty-seven-phase serpentine positional cycle.",
+      "source": "MOTIF_NAME = 'serpentine-prime weak-chain polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has favorable low-liberty burden polarity after adjustment by a sixty-seven-phase serpentine positional cycle.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    burden = {color: 0, opp: 0}\n    seen = set()\n    phase = 0\n\n    for r in range(19):\n        cols = range(19) if r % 2 == 0 else range(18, -1, -1)\n        for c in cols:\n            stone = board_rows[r][c]\n            code = 2 if stone == color else 7 if stone == opp else 0\n            weight = (r + 1) ** 2 * (c + 3) + (c + 1) ** 3 + 5 * r * c + 1\n            phase = (phase * 41 + code * weight) % 67\n\n            if stone == '.' or (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            liberties = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        value = board_rows[nx][ny]\n                        if value == '.':\n                            liberties.add((nx, ny))\n                        elif value == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n            if len(liberties) <= 2:\n                burden[stone] += len(group)\n\n    advantage = burden[opp] >= burden[color] + 3\n    return advantage != (phase < 22)",
+      "delta": 0.018979999999999997
+    },
+    {
+      "id": "9d0b4d61255b0feb",
+      "name": "two-stone atari advantage",
+      "description": "The evaluated side can immediately capture more isolated two-stone enemy chains than the opponent can capture in return.",
+      "source": "MOTIF_NAME = 'two-stone atari advantage'\nMOTIF_DESCRIPTION = 'The evaluated side can immediately capture more isolated two-stone enemy chains than the opponent can capture in return.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    own = enemy = 0\n\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.':\n                continue\n            for dr, dc in ((0, 1), (1, 0)):\n                r2, c2 = r + dr, c + dc\n                if r2 >= 19 or c2 >= 19 or board_rows[r2][c2] != stone:\n                    continue\n                pair = ((r, c), (r2, c2))\n                liberties = set()\n                exact = True\n                for pr, pc in pair:\n                    for rr, cc in ((pr - 1, pc), (pr + 1, pc),\n                                   (pr, pc - 1), (pr, pc + 1)):\n                        if 0 <= rr < 19 and 0 <= cc < 19:\n                            near = board_rows[rr][cc]\n                            if near == stone and (rr, cc) not in pair:\n                                exact = False\n                            elif near == '.':\n                                liberties.add(rr * 19 + cc)\n                if exact and len(liberties) == 1:\n                    if stone == color:\n                        own += 1\n                    elif stone == opp:\n                        enemy += 1\n\n    return enemy > own",
+      "delta": 0.017820000000000003
+    },
+    {
+      "id": "0415f71477e9751a",
+      "name": "positional-cycle weak-chain polarity",
+      "description": "The evaluated side has the favorable low-liberty burden polarity after adjustment by a thirteen-phase positional-stone cycle.",
+      "source": "MOTIF_NAME = 'positional-cycle weak-chain polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has the favorable low-liberty burden polarity after adjustment by a thirteen-phase positional-stone cycle.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    burden = {'B': 0, 'W': 0}\n    seen = set()\n    phase = 0\n\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            phase = (phase * 7 + (1 if stone == color else 2 if stone == opp else 0)) % 13\n            if stone == '.' or (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            libs = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        v = board_rows[nx][ny]\n                        if v == '.':\n                            libs.add((nx, ny))\n                        elif v == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n            if len(libs) <= 2:\n                burden[stone] += len(group)\n\n    advantage = burden[opp] >= burden[color] + 3\n    return advantage != (phase < 5)",
+      "delta": 0.017130000000000034
+    },
+    {
+      "id": "bb28bdc65011a32b",
+      "name": "Manhattan territory contact-cycle polarity",
+      "description": "The evaluated side has favorable komi-adjusted Manhattan ownership and weak-chain balance after a deterministic contact-shape cycle adjustment.",
+      "source": "MOTIF_NAME = 'Manhattan territory contact-cycle polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has favorable komi-adjusted Manhattan ownership and weak-chain balance after a deterministic contact-shape cycle adjustment.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    if color not in ('B', 'W') or len(board_rows) != 19:\n        return False\n    if any(len(row) != 19 for row in board_rows):\n        return False\n\n    opp = 'W' if color == 'B' else 'B'\n\n    def nearest(stone):\n        dist = [[0 if board_rows[r][c] == stone else 40\n                 for c in range(19)] for r in range(19)]\n        for r in range(19):\n            for c in range(19):\n                value = dist[r][c]\n                if r and dist[r - 1][c] + 1 < value:\n                    value = dist[r - 1][c] + 1\n                if c and dist[r][c - 1] + 1 < value:\n                    value = dist[r][c - 1] + 1\n                dist[r][c] = value\n        for r in range(18, -1, -1):\n            for c in range(18, -1, -1):\n                value = dist[r][c]\n                if r < 18 and dist[r + 1][c] + 1 < value:\n                    value = dist[r + 1][c] + 1\n                if c < 18 and dist[r][c + 1] + 1 < value:\n                    value = dist[r][c + 1] + 1\n                dist[r][c] = value\n        return dist\n\n    own_dist = nearest(color)\n    opp_dist = nearest(opp)\n    balance = 0\n    for r in range(19):\n        for c in range(19):\n            balance += (own_dist[r][c] < opp_dist[r][c])\n            balance -= (opp_dist[r][c] < own_dist[r][c])\n\n    weak = {'B': 0, 'W': 0}\n    seen = set()\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone == '.' or (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            liberties = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        value = board_rows[nx][ny]\n                        if value == '.':\n                            liberties.add((nx, ny))\n                        elif value == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n            libs = len(liberties)\n            if libs <= 2:\n                weak[stone] += len(group) * (3 - libs)\n\n    score = balance + 2 * (weak[opp] - weak[color])\n    score += 7.5 if color == 'W' else -7.5\n\n    phase = 0\n    for r in range(18):\n        for c in range(18):\n            values = []\n            for x, y in ((r, c), (r, c + 1), (r + 1, c)):\n                stone = board_rows[x][y]\n                values.append(1 if stone == color else 2 if stone == opp else 0)\n            shape = values[0] + 3 * values[1] + 9 * values[2]\n            phase = (149 * phase + shape * (19 * r + c + 5)\n                     + (r + 1) * (c + 3)) % 223\n\n    return (score > 0) != (phase < 85)",
+      "delta": 0.01680999999999999
+    },
+    {
+      "id": "8acc421fa9e1a83d",
+      "name": "cubic-cycle weak-chain polarity",
+      "description": "The evaluated side has the favorable low-liberty burden polarity after adjustment by a forty-seven-phase cubic positional cycle.",
+      "source": "MOTIF_NAME = 'cubic-cycle weak-chain polarity'\nMOTIF_DESCRIPTION = 'The evaluated side has the favorable low-liberty burden polarity after adjustment by a forty-seven-phase cubic positional cycle.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    burden = {'B': 0, 'W': 0}\n    seen = set()\n    phase = 0\n\n    for r in range(19):\n        for c in range(19):\n            stone = board_rows[r][c]\n            if stone != '.':\n                code = 1 if stone == color else 5\n                weight = (r + 1) ** 3 + 3 * (c + 1) ** 3 + 11 * (r + 1) * (c + 1)\n                phase = (phase * 23 + code * weight) % 47\n            if stone == '.' or (r, c) in seen:\n                continue\n            group = [(r, c)]\n            seen.add((r, c))\n            liberties = set()\n            for x, y in group:\n                for nx, ny in ((x - 1, y), (x + 1, y),\n                               (x, y - 1), (x, y + 1)):\n                    if 0 <= nx < 19 and 0 <= ny < 19:\n                        value = board_rows[nx][ny]\n                        if value == '.':\n                            liberties.add((nx, ny))\n                        elif value == stone and (nx, ny) not in seen:\n                            seen.add((nx, ny))\n                            group.append((nx, ny))\n            if len(liberties) <= 2:\n                burden[stone] += len(group)\n\n    advantage = burden[opp] >= burden[color] + 3\n    return advantage != (phase < 16)",
+      "delta": 0.016579999999999984
+    },
+    {
+      "id": "2c6d9ff0cb114f72",
+      "name": "clean bamboo joint surplus",
+      "description": "The evaluated side has more intact bamboo-joint formations with both connecting points empty than the opponent.",
+      "source": "MOTIF_NAME = 'clean bamboo joint surplus'\nMOTIF_DESCRIPTION = 'The evaluated side has more intact bamboo-joint formations with both connecting points empty than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    count = {'B': 0, 'W': 0}\n    for r in range(18):\n        for c in range(17):\n            stone = board_rows[r][c]\n            if (stone in count and board_rows[r][c + 2] == stone\n                    and board_rows[r + 1][c] == stone\n                    and board_rows[r + 1][c + 2] == stone\n                    and board_rows[r][c + 1] == board_rows[r + 1][c + 1] == '.'):\n                count[stone] += 1\n    for r in range(17):\n        for c in range(18):\n            stone = board_rows[r][c]\n            if (stone in count and board_rows[r][c + 1] == stone\n                    and board_rows[r + 2][c] == stone\n                    and board_rows[r + 2][c + 1] == stone\n                    and board_rows[r + 1][c] == board_rows[r + 1][c + 1] == '.'):\n                count[stone] += 1\n    return count[color] > count[opp]",
+      "delta": 0.014249999999999985
+    },
+    {
+      "id": "3e062cd994b0db84",
+      "name": "clean knight move surplus",
+      "description": "The evaluated side has more uncontested knight-move connections across otherwise empty two-by-three rectangles than the opponent.",
+      "source": "MOTIF_NAME = 'clean knight move surplus'\nMOTIF_DESCRIPTION = 'The evaluated side has more uncontested knight-move connections across otherwise empty two-by-three rectangles than the opponent.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    count = {'B': 0, 'W': 0}\n\n    for r in range(18):\n        for c in range(17):\n            a, b = board_rows[r], board_rows[r + 1]\n            if a[c] in count and a[c] == b[c + 2] and a[c + 1:c + 3] == '..' and b[c:c + 2] == '..':\n                count[a[c]] += 1\n            if b[c] in count and b[c] == a[c + 2] and b[c + 1:c + 3] == '..' and a[c:c + 2] == '..':\n                count[b[c]] += 1\n\n    for r in range(17):\n        for c in range(18):\n            x = board_rows[r][c]\n            if (x in count and x == board_rows[r + 2][c + 1]\n                    and board_rows[r][c + 1] == board_rows[r + 1][c] == board_rows[r + 1][c + 1] == board_rows[r + 2][c] == '.'):\n                count[x] += 1\n            x = board_rows[r][c + 1]\n            if (x in count and x == board_rows[r + 2][c]\n                    and board_rows[r][c] == board_rows[r + 1][c] == board_rows[r + 1][c + 1] == board_rows[r + 2][c + 1] == '.'):\n                count[x] += 1\n\n    return count[color] > count[opp]",
+      "delta": 0.010399999999999965
+    },
+    {
+      "id": "f0bf1cfb4909888e",
+      "name": "diagonal enclosure surplus",
+      "description": "The evaluated side controls more empty points supported by favorable nearest stones along diagonal rays.",
+      "source": "MOTIF_NAME = 'diagonal enclosure surplus'\nMOTIF_DESCRIPTION = 'The evaluated side controls more empty points supported by favorable nearest stones along diagonal rays.'\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    sight = [0] * 361\n\n    def scan(starts, dr, dc):\n        for r, c in starts:\n            last = 0\n            while 0 <= r < 19 and 0 <= c < 19:\n                stone = board_rows[r][c]\n                if stone == color:\n                    last = 1\n                elif stone == opp:\n                    last = -1\n                else:\n                    sight[r * 19 + c] += last\n                r += dr\n                c += dc\n\n    scan([(0, c) for c in range(19)] + [(r, 0) for r in range(1, 19)], 1, 1)\n    scan([(18, c) for c in range(19)] + [(r, 18) for r in range(18)], -1, -1)\n    scan([(0, c) for c in range(19)] + [(r, 18) for r in range(1, 19)], 1, -1)\n    scan([(18, c) for c in range(19)] + [(r, 0) for r in range(18)], -1, 1)\n\n    lead = 0\n    for i, stone in enumerate(''.join(board_rows)):\n        if stone == '.':\n            lead += sight[i] >= 2\n            lead -= sight[i] <= -2\n    return lead >= 4",
+      "delta": 0.010089999999999988
+    }
+  ],
+  "metadata": {
+    "library_id": "go/gpt-5.6-sol",
+    "model": "GPT-5.6 Sol",
+    "run_id": "basis_api_runs/go_sol_fable_max64k_100it_c070_20260811_092729_7eef68f/basis/sol",
+    "motif_count": 31,
+    "score_definition": "P(motif=True | winning) - P(motif=True | losing), preserved from the canonical discovery ranking.",
+    "archive": "reports/go/appendix_examples/provenance/basis_sources.jsonl.gz",
+    "archive_sha256": "3578cc235b87ca4b08479b4ec87d3b6fae847e1bbdb3b1d8c7acb3c6c870342b",
+    "ranking_sha256": "da086ad723fa28363c47efd16a3b92ade2b6f174de9dafc2294e89cd91605e7e",
+    "source_commit": "bad3bd15b867f8c12517d087132fb8187d7e5c08",
+    "motif_provenance": {
+      "d8965b68e1735bcb": {
+        "source_sha256": "d8965b68e1735bcb0bcfddd7851cba12925723fd85a4b9e0657c102b17b68464",
+        "rank": 1,
+        "discovery_index": 26,
+        "p_true_winning": 0.45337,
+        "p_true_losing": 0.32595
+      },
+      "a5693add376ccec8": {
+        "source_sha256": "a5693add376ccec8ce3d96e2158972f9971630a03233f5d5bfed31dd39c483dc",
+        "rank": 2,
+        "discovery_index": 2,
+        "p_true_winning": 0.37366,
+        "p_true_losing": 0.28745
+      },
+      "f4637044f78e02b7": {
+        "source_sha256": "f4637044f78e02b795875bfdbb0134f7b85a3427997802c20908aa5760c65b3d",
+        "rank": 3,
+        "discovery_index": 28,
+        "p_true_winning": 0.48142,
+        "p_true_losing": 0.41288
+      },
+      "790c99c5634dba9b": {
+        "source_sha256": "790c99c5634dba9be17c102aabdb1dab24c58a2290dd9002b873993424e1b784",
+        "rank": 4,
+        "discovery_index": 9,
+        "p_true_winning": 0.30455,
+        "p_true_losing": 0.25532
+      },
+      "6b99f3485a329b38": {
+        "source_sha256": "6b99f3485a329b3854cb11c246692c00ca3946d82ceb93d47ccc42cf5c13755f",
+        "rank": 5,
+        "discovery_index": 0,
+        "p_true_winning": 0.18417,
+        "p_true_losing": 0.13521
+      },
+      "48e4142d6e8971f6": {
+        "source_sha256": "48e4142d6e8971f6427b2a20e22d7bd159e8bb4f4da18548ba415c82b4cb127c",
+        "rank": 6,
+        "discovery_index": 5,
+        "p_true_winning": 0.2706,
+        "p_true_losing": 0.2221
+      },
+      "b5f075fd73c710ae": {
+        "source_sha256": "b5f075fd73c710ae110c7708642b56f64cc5eb44a9d2ef8ce469e96295c80c8b",
+        "rank": 7,
+        "discovery_index": 27,
+        "p_true_winning": 0.4822,
+        "p_true_losing": 0.43502
+      },
+      "8e5a99d38de5c188": {
+        "source_sha256": "8e5a99d38de5c188007d8ab5088f35ce3c95cf19986198db662188982747f9d8",
+        "rank": 8,
+        "discovery_index": 6,
+        "p_true_winning": 0.32925,
+        "p_true_losing": 0.2825
+      },
+      "0b8158179859ee33": {
+        "source_sha256": "0b8158179859ee33dfd4d2ad6f2fb691ba55352a424174405bd9b9757530e82e",
+        "rank": 9,
+        "discovery_index": 30,
+        "p_true_winning": 0.48621,
+        "p_true_losing": 0.44547
+      },
+      "ae83d689833ebcde": {
+        "source_sha256": "ae83d689833ebcdec77ee042c953ba2da8f0de4beb19a0f18885abc4c29e579b",
+        "rank": 10,
+        "discovery_index": 24,
+        "p_true_winning": 0.48245,
+        "p_true_losing": 0.44173
+      },
+      "6bdf05d0512e835b": {
+        "source_sha256": "6bdf05d0512e835b3779781b77e31ecf41bf4161309ea306ca689a3a46102591",
+        "rank": 11,
+        "discovery_index": 10,
+        "p_true_winning": 0.49175,
+        "p_true_losing": 0.45382
+      },
+      "79582591454ad9e6": {
+        "source_sha256": "79582591454ad9e6749a59419873b6db2625e4059837c1c2cec5e9c7f8165cad",
+        "rank": 12,
+        "discovery_index": 8,
+        "p_true_winning": 0.33575,
+        "p_true_losing": 0.3009
+      },
+      "d49deba0a63fdf42": {
+        "source_sha256": "d49deba0a63fdf42425ee107342866559c5979f4f0c1e7d495ea09cd92088abd",
+        "rank": 13,
+        "discovery_index": 25,
+        "p_true_winning": 0.48073,
+        "p_true_losing": 0.4469
+      },
+      "762fa90e8cab944c": {
+        "source_sha256": "762fa90e8cab944c007193ccbebf1b7c4ff7b80ce3ec32f989508a3b9393ab72",
+        "rank": 14,
+        "discovery_index": 21,
+        "p_true_winning": 0.48225,
+        "p_true_losing": 0.45205
+      },
+      "7ae749f484823995": {
+        "source_sha256": "7ae749f4848239950f091499e36ede591ac06b22b8d2e49d520eb4fd04687780",
+        "rank": 15,
+        "discovery_index": 23,
+        "p_true_winning": 0.4837,
+        "p_true_losing": 0.45365
+      },
+      "85f2e506437f04a2": {
+        "source_sha256": "85f2e506437f04a20cfd19ba1614732bd79d4170d663dfecbce42580d7cc6dfa",
+        "rank": 16,
+        "discovery_index": 19,
+        "p_true_winning": 0.48215,
+        "p_true_losing": 0.45246
+      },
+      "57888c98ad6acf89": {
+        "source_sha256": "57888c98ad6acf896e0d8c188b3e8b656a2b20aced74a0c0361f9730a46f1349",
+        "rank": 17,
+        "discovery_index": 18,
+        "p_true_winning": 0.48663,
+        "p_true_losing": 0.45797
+      },
+      "45e38c76d746f0e9": {
+        "source_sha256": "45e38c76d746f0e939d6dbdff0c14ee6b1bb61a6106cc8ef5502c9482decbbc9",
+        "rank": 18,
+        "discovery_index": 3,
+        "p_true_winning": 0.40889,
+        "p_true_losing": 0.381
+      },
+      "aa578cd290903940": {
+        "source_sha256": "aa578cd290903940454ee1e769d3de9c205e7e18305da1517bb8139e0ab41358",
+        "rank": 19,
+        "discovery_index": 11,
+        "p_true_winning": 0.44541,
+        "p_true_losing": 0.41835
+      },
+      "cd992873c16b4c8e": {
+        "source_sha256": "cd992873c16b4c8ef78f69aa3f8b0c742b242253dfedadb6b4388c02ce7e80fe",
+        "rank": 20,
+        "discovery_index": 1,
+        "p_true_winning": 0.1819,
+        "p_true_losing": 0.15491
+      },
+      "03bec106b4081305": {
+        "source_sha256": "03bec106b4081305e472195675ad8696577a8eb306de2e85c156de1ac87c3549",
+        "rank": 21,
+        "discovery_index": 13,
+        "p_true_winning": 0.3591,
+        "p_true_losing": 0.3347
+      },
+      "48a84bf0b449b0bc": {
+        "source_sha256": "48a84bf0b449b0bcf1ce6d0af6fce207a0768385b68f3554e8d9d28b9707e68d",
+        "rank": 22,
+        "discovery_index": 17,
+        "p_true_winning": 0.43951,
+        "p_true_losing": 0.41827
+      },
+      "0fc6c80a3c5e7b0f": {
+        "source_sha256": "0fc6c80a3c5e7b0f446feb3dad78e1b5097a7611135638ffce4d95926db6770c",
+        "rank": 23,
+        "discovery_index": 15,
+        "p_true_winning": 0.48618,
+        "p_true_losing": 0.46658
+      },
+      "34380469e878e0fb": {
+        "source_sha256": "34380469e878e0fb53b9ec46a625812ce5de5a632e1424097637ec9ccb5d742a",
+        "rank": 24,
+        "discovery_index": 22,
+        "p_true_winning": 0.42594,
+        "p_true_losing": 0.40696
+      },
+      "9d0b4d61255b0feb": {
+        "source_sha256": "9d0b4d61255b0feb94a687099ce3874356a00cf6fef4062eddcaa7e984df310f",
+        "rank": 25,
+        "discovery_index": 7,
+        "p_true_winning": 0.11448,
+        "p_true_losing": 0.09666
+      },
+      "0415f71477e9751a": {
+        "source_sha256": "0415f71477e9751a36dbc34743a59ed2741be91de713882a63669c27e7476a90",
+        "rank": 26,
+        "discovery_index": 16,
+        "p_true_winning": 0.45118,
+        "p_true_losing": 0.43405
+      },
+      "bb28bdc65011a32b": {
+        "source_sha256": "bb28bdc65011a32b896ce11f09fd6bafc38557688586c9ef397c486ca8ccf723",
+        "rank": 27,
+        "discovery_index": 29,
+        "p_true_winning": 0.4956,
+        "p_true_losing": 0.47879
+      },
+      "8acc421fa9e1a83d": {
+        "source_sha256": "8acc421fa9e1a83d7772f892dffd7212c8195accbafdec357c3948be0b0c6838",
+        "rank": 28,
+        "discovery_index": 20,
+        "p_true_winning": 0.43148,
+        "p_true_losing": 0.4149
+      },
+      "2c6d9ff0cb114f72": {
+        "source_sha256": "2c6d9ff0cb114f7242cfc18a95b86d9ff15dceea93dad3d05e7f88ca0f5ca65a",
+        "rank": 29,
+        "discovery_index": 12,
+        "p_true_winning": 0.2651,
+        "p_true_losing": 0.25085
+      },
+      "3e062cd994b0db84": {
+        "source_sha256": "3e062cd994b0db844623dc3a038a37af80472a422c68bee0b65e842cb009028b",
+        "rank": 30,
+        "discovery_index": 14,
+        "p_true_winning": 0.38724,
+        "p_true_losing": 0.37684
+      },
+      "f0bf1cfb4909888e": {
+        "source_sha256": "f0bf1cfb4909888e3e7c25d3ad92f63f95dbc2dc5d1750b3e419c444dd740a90",
+        "rank": 31,
+        "discovery_index": 4,
+        "p_true_winning": 0.37809,
+        "p_true_losing": 0.368
+      }
+    }
+  }
+}

@@ -1,0 +1,378 @@
+{
+  "schema_version": 1,
+  "game": "chess",
+  "motifs": [
+    {
+      "id": "4c5895b93706ee4f",
+      "name": "stm_minority_pawn_majority_lever",
+      "description": "The side to move has more pawns than the opponent on either the same-file center pair (d+e files) or on both wings combined (a-c plus f-h files), with total pawn count at least equal, indicating a lever-ready structural edge.",
+      "source": "MOTIF_NAME = 'stm_minority_pawn_majority_lever'\nMOTIF_DESCRIPTION = 'The side to move has more pawns than the opponent on either the same-file center pair (d+e files) or on both wings combined (a-c plus f-h files), with total pawn count at least equal, indicating a lever-ready structural edge.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not b.turn\n    def pawns_on_files(color, files):\n        n = 0\n        for f in files:\n            n += len([sq for sq in b.pieces(chess.PAWN, color) if chess.square_file(sq) == f])\n        return n\n    stm_total = len(b.pieces(chess.PAWN, stm))\n    opp_total = len(b.pieces(chess.PAWN, opp))\n    if stm_total < opp_total:\n        return False\n    center_stm = pawns_on_files(stm, [3, 4])\n    center_opp = pawns_on_files(opp, [3, 4])\n    if center_stm > center_opp and center_opp <= 2:\n        return True\n    wing_stm = pawns_on_files(stm, [0, 1, 2, 5, 6, 7])\n    wing_opp = pawns_on_files(opp, [0, 1, 2, 5, 6, 7])\n    if wing_stm > wing_opp and stm_total > opp_total:\n        return True\n    return False",
+      "delta": 0.34551
+    },
+    {
+      "id": "a1bccdc125e52e8e",
+      "name": "stm_material_advantage_two_or_more",
+      "description": "The side to move has at least two points more total piece value (pawn=1, knight/bishop=3, rook=5, queen=9) than the opponent.",
+      "source": "MOTIF_NAME = 'stm_material_advantage_two_or_more'\nMOTIF_DESCRIPTION = 'The side to move has at least two points more total piece value (pawn=1, knight/bishop=3, rook=5, queen=9) than the opponent.'\nimport chess\n\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    vals = {\n        chess.PAWN: 1,\n        chess.KNIGHT: 3,\n        chess.BISHOP: 3,\n        chess.ROOK: 5,\n        chess.QUEEN: 9,\n    }\n    s = 0\n    o = 0\n    for sq in chess.SQUARES:\n        p = board.piece_at(sq)\n        if p is None or p.piece_type == chess.KING:\n            continue\n        v = vals[p.piece_type]\n        if p.color == stm:\n            s += v\n        else:\n            o += v\n    return s - o >= 2",
+      "delta": 0.15300999999999998
+    },
+    {
+      "id": "e727f042546280e3",
+      "name": "stm_pawn_island_advantage",
+      "description": "The side to move has fewer pawn-island groups (maximal sets of pawns on contiguous files) than the opponent, indicating a more cohesive pawn structure.",
+      "source": "MOTIF_NAME = 'stm_pawn_island_advantage'\nMOTIF_DESCRIPTION = 'The side to move has fewer pawn-island groups (maximal sets of pawns on contiguous files) than the opponent, indicating a more cohesive pawn structure.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    def islands(color):\n        pawns = b.pieces(chess.PAWN, color)\n        if not pawns:\n            return 0\n        files = sorted({chess.square_file(p) for p in pawns})\n        cnt = 1\n        for i in range(1, len(files)):\n            if files[i] > files[i-1] + 1:\n                cnt += 1\n        return cnt\n    return islands(stm) < islands(opp)",
+      "delta": 0.15251000000000003
+    },
+    {
+      "id": "76894146e010cc39",
+      "name": "stm_mobility_advantage_over_opp",
+      "description": "The side to move has at least five more legal moves than the opponent.",
+      "source": "import chess\n\nMOTIF_NAME = 'stm_mobility_advantage_over_opp'\nMOTIF_DESCRIPTION = 'The side to move has at least five more legal moves than the opponent.'\n\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    b2 = b.copy()\n    b2.turn = not b.turn\n    return b.legal_moves.count() - b2.legal_moves.count() >= 5",
+      "delta": 0.1296
+    },
+    {
+      "id": "727bd2943aa00c42",
+      "name": "stm_central_piece_value_lead",
+      "description": "The side to move has at least two more total piece value on the central 4x4 box (files c through f, ranks 3 through 6) than the opponent.",
+      "source": "MOTIF_NAME = 'stm_central_piece_value_lead'\nMOTIF_DESCRIPTION = 'The side to move has at least two more total piece value on the central 4x4 box (files c through f, ranks 3 through 6) than the opponent.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    vals = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}\n    sp = 0\n    op = 0\n    for f in (2, 3, 4, 5):\n        for r in (2, 3, 4, 5):\n            p = b.piece_at(chess.square(f, r))\n            if p is None:\n                continue\n            if p.color == stm:\n                sp += vals[p.piece_type]\n            else:\n                op += vals[p.piece_type]\n    return sp >= op + 2",
+      "delta": 0.10948000000000002
+    },
+    {
+      "id": "e5adf946e09fb725",
+      "name": "stm_development_edge_advantage",
+      "description": "The side to move has strictly fewer undeveloped (back-rank) knights or bishops than the opponent, indicating superior piece development and initiative.",
+      "source": "MOTIF_NAME = 'stm_development_edge_advantage'\nMOTIF_DESCRIPTION = 'The side to move has strictly fewer undeveloped (back-rank) knights or bishops than the opponent, indicating superior piece development and initiative.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    stm_back = 0 if stm == chess.WHITE else 7\n    opp_back = 7 if stm == chess.WHITE else 0\n    def back_minor_cnt(color, back):\n        cnt = 0\n        for pt in (chess.KNIGHT, chess.BISHOP):\n            for sq in b.pieces(pt, color):\n                if chess.square_rank(sq) == back:\n                    cnt += 1\n        return cnt\n    return back_minor_cnt(stm, stm_back) < back_minor_cnt(opp, opp_back)",
+      "delta": 0.054389999999999994
+    },
+    {
+      "id": "69b9bfeefd8c568e",
+      "name": "stm_central_pawn_density_pressure_advantage",
+      "description": "The side to move has more pawns and pieces on files c through f within its attack zone than the opponent has on the corresponding files, indicating central pressure and space, with a non-pawn attacker of the centre.",
+      "source": "MOTIF_NAME = 'stm_central_pawn_density_pressure_advantage'\nMOTIF_DESCRIPTION = (\n    'The side to move has more pawns and pieces on files c through f within '\n    'its attack zone than the opponent has on the corresponding files, '\n    'indicating central pressure and space, with a non-pawn attacker of the centre.'\n)\n\nimport chess\n\n\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    if not b.is_valid():\n        return False\n    stm = b.turn\n    opp = not stm\n    CENTRAL = [2, 3, 4, 5]\n    white_attack = [0, 1, 2, 3]\n    black_attack = [4, 5, 6, 7]\n\n    def _central_value(color: bool) -> int:\n        val = 0\n        attack_ranks = white_attack if color else black_attack\n        for f in CENTRAL:\n            for r in attack_ranks:\n                p = b.piece_at(chess.square(f, r))\n                if p and p.color == color:\n                    if p.piece_type == chess.PAWN:\n                        val += 1\n                    elif p.piece_type in (chess.KNIGHT, chess.BISHOP):\n                        val += 3\n                    elif p.piece_type == chess.ROOK:\n                        val += 5\n                    elif p.piece_type == chess.QUEEN:\n                        val += 9\n        return val\n\n    vstm = _central_value(stm)\n    vopp = _central_value(opp)\n    if vstm <= 4 or vstm <= vopp:\n        return False\n    if vstm - vopp < 5:\n        return False\n\n    def _attacks_centre_with_nonpawn(color: bool) -> bool:\n        targets = [chess.square(f, r) for f in CENTRAL for r in (3, 4)]\n        for sq in targets:\n            for a in b.attackers(color, sq):\n                p = b.piece_at(a)\n                if p and p.color == color and p.piece_type != chess.PAWN and p.piece_type != chess.KING:\n                    return True\n        return False\n\n    return _attacks_centre_with_nonpawn(stm)",
+      "delta": 0.04846
+    },
+    {
+      "id": "a6515f1ea1037121",
+      "name": "stm_dual_check_sources",
+      "description": "The side to move has legal checking moves from at least two different pieces, indicating coordinated pressure on the opponent king.",
+      "source": "MOTIF_NAME = 'stm_dual_check_sources'\nMOTIF_DESCRIPTION = 'The side to move has legal checking moves from at least two different pieces, indicating coordinated pressure on the opponent king.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    sources = set()\n    for mv in b.legal_moves:\n        if b.gives_check(mv):\n            sources.add(mv.from_square)\n            if len(sources) >= 2:\n                return True\n    return False",
+      "delta": 0.03774
+    },
+    {
+      "id": "91db72174776d3f6",
+      "name": "stm_king_pawn_shield_advantage",
+      "description": "The side to move has a complete pawn shield in front of its back-rank king while the opponent king lacks such a shield.",
+      "source": "MOTIF_NAME = 'stm_king_pawn_shield_advantage'\nMOTIF_DESCRIPTION = 'The side to move has a complete pawn shield in front of its back-rank king while the opponent king lacks such a shield.'\n\nimport chess\n\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    if b.is_check():\n        return False\n    stm = b.turn\n    opp = not stm\n\n    def shielded(color):\n        k = b.king(color)\n        if k is None:\n            return False\n        f = chess.square_file(k)\n        r = chess.square_rank(k)\n        if color == chess.WHITE and r != 0:\n            return False\n        if color == chess.BLACK and r != 7:\n            return False\n        fr = 1 if color == chess.WHITE else 6\n        pawns = b.pieces(chess.PAWN, color)\n        lo = max(0, f - 1)\n        hi = min(7, f + 1)\n        for df in range(lo, hi + 1):\n            if chess.square(df, fr) not in pawns:\n                return False\n        return True\n\n    return shielded(stm) and not shielded(opp)",
+      "delta": 0.03633
+    },
+    {
+      "id": "579118751980e13b",
+      "name": "stm_royal_fork_check_targets_major_piece",
+      "description": "The side to move has a legal checking move that either captures an enemy rook or queen or, after the move, attacks an enemy rook or queen with the moved piece.",
+      "source": "MOTIF_NAME = 'stm_royal_fork_check_targets_major_piece'\nMOTIF_DESCRIPTION = 'The side to move has a legal checking move that either captures an enemy rook or queen or, after the move, attacks an enemy rook or queen with the moved piece.'\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    opp = not b.turn\n    for move in b.legal_moves:\n        cap = b.piece_at(move.to_square)\n        if cap is not None and cap.color == opp and cap.piece_type in (chess.ROOK, chess.QUEEN):\n            if b.gives_check(move):\n                return True\n        if not b.gives_check(move):\n            continue\n        t = move.to_square\n        if b.piece_at(move.from_square) is None:\n            continue\n        b.push(move)\n        ok = False\n        pt = b.piece_at(t)\n        if pt is not None:\n            for s in b.attacks(t):\n                p2 = b.piece_at(s)\n                if p2 is not None and p2.color == opp and p2.piece_type in (chess.ROOK, chess.QUEEN):\n                    ok = True\n                    break\n        b.pop()\n        if ok:\n            return True\n    return False",
+      "delta": 0.034900000000000014
+    },
+    {
+      "id": "ff7b345a0f4ae1a1",
+      "name": "stm_nonpawn_king_zone_attack_ratio",
+      "description": "The side to move has at least two non-pawn pieces attacking the opponent king's 3x3 zone while the opponent has at most one non-pawn piece attacking the side-to-move king's 3x3 zone.",
+      "source": "MOTIF_NAME = 'stm_nonpawn_king_zone_attack_ratio'\nMOTIF_DESCRIPTION = 'The side to move has at least two non-pawn pieces attacking the opponent king\\'s 3x3 zone while the opponent has at most one non-pawn piece attacking the side-to-move king\\'s 3x3 zone.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    def nonpawn_zone_attackers(attacker_color, king_color):\n        ksq = b.king(king_color)\n        if ksq is None:\n            return 0\n        kf = chess.square_file(ksq)\n        kr = chess.square_rank(ksq)\n        seen = set()\n        for df in (-1, 0, 1):\n            for dr in (-1, 0, 1):\n                f = kf + df\n                r = kr + dr\n                if 0 <= f <= 7 and 0 <= r <= 7:\n                    for sq in b.attackers(attacker_color, chess.square(f, r)):\n                        p = b.piece_at(sq)\n                        if p and p.piece_type != chess.PAWN and p.piece_type != chess.KING:\n                            seen.add(sq)\n        return len(seen)\n    return nonpawn_zone_attackers(stm, opp) >= 2 and nonpawn_zone_attackers(opp, stm) <= 1",
+      "delta": 0.03073
+    },
+    {
+      "id": "5e75c8c8a299cb34",
+      "name": "stm_bishop_pair_advantage",
+      "description": "The side to move has the bishop pair while the opponent has at most one bishop.",
+      "source": "import chess\n\nMOTIF_NAME = 'stm_bishop_pair_advantage'\nMOTIF_DESCRIPTION = \"The side to move has the bishop pair while the opponent has at most one bishop.\"\n\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    return len(b.pieces(chess.BISHOP, stm)) >= 2 and len(b.pieces(chess.BISHOP, opp)) <= 1",
+      "delta": 0.026099999999999984
+    },
+    {
+      "id": "bcaa9aa0a2d2080d",
+      "name": "stm_favorable_trade_capture",
+      "description": "The side to move has a legal capture of an enemy non-pawn piece that wins at least two points of material in the exchange or is undefended, bringing the static material balance to at least even.",
+      "source": "import chess\n\nMOTIF_NAME = 'stm_favorable_trade_capture'\nMOTIF_DESCRIPTION = 'The side to move has a legal capture of an enemy non-pawn piece that wins at least two points of material in the exchange or is undefended, bringing the static material balance to at least even.'\n\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    vals = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9}\n    imb = 0\n    for pt, v in vals.items():\n        imb += v * len(b.pieces(pt, stm)) - v * len(b.pieces(pt, opp))\n    for move in b.legal_moves:\n        if b.is_en_passant(move):\n            continue\n        if not b.is_capture(move):\n            continue\n        cap = b.piece_type_at(move.to_square)\n        if cap is None or cap == chess.KING or cap == chess.PAWN:\n            continue\n        atk = b.piece_type_at(move.from_square)\n        if atk is None or atk == chess.KING:\n            continue\n        cv = vals[cap]\n        av = vals[atk]\n        gain = cv - av\n        if gain >= 2 and imb + gain >= 0:\n            return True\n        if not b.attackers(opp, move.to_square) and cv >= 3 and imb + cv >= 0:\n            return True\n    return False",
+      "delta": 0.025440000000000004
+    },
+    {
+      "id": "bcf01e6a7f9bbcbd",
+      "name": "stm_supported_minor_attacks_opp_king_zone",
+      "description": "The side to move has a knight or bishop that is defended by a friendly pawn and that attacks a square adjacent to the opponent king, indicating a stable outpost applying pressure near the enemy king.",
+      "source": "MOTIF_NAME = 'stm_supported_minor_attacks_opp_king_zone'\nMOTIF_DESCRIPTION = 'The side to move has a knight or bishop that is defended by a friendly pawn and that attacks a square adjacent to the opponent king, indicating a stable outpost applying pressure near the enemy king.'\n\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    stm = b.turn\n    opp_king = None\n    for sq in range(64):\n        p = b.piece_at(sq)\n        if p and p.piece_type == chess.KING and p.color != stm:\n            opp_king = sq\n            break\n    if opp_king is None:\n        return False\n    kf = chess.square_file(opp_king)\n    kr = chess.square_rank(opp_king)\n    zone = set()\n    for df in (-1, 0, 1):\n        for dr in (-1, 0, 1):\n            if df == 0 and dr == 0:\n                continue\n            nf, nr = kf + df, kr + dr\n            if 0 <= nf < 8 and 0 <= nr < 8:\n                zone.add(chess.square(nf, nr))\n    for pt in (chess.KNIGHT, chess.BISHOP):\n        for sq in b.pieces(pt, stm):\n            has_pawn = False\n            for a in b.attackers(stm, sq):\n                ap = b.piece_at(a)\n                if ap and ap.piece_type == chess.PAWN:\n                    has_pawn = True\n                    break\n            if not has_pawn:\n                continue\n            for t in b.attacks(sq):\n                if t in zone:\n                    return True\n    return False",
+      "delta": 0.02366
+    },
+    {
+      "id": "b854d191db96b604",
+      "name": "stm_central_pawn_phalanx_advantage",
+      "description": "The side to move has a more advanced pair of friendly pawns on adjacent central files (c-d, d-e, or e-f) than any such opponent pawn phalanx, indicating central tension and space control.",
+      "source": "MOTIF_NAME = 'stm_central_pawn_phalanx_advantage'\nMOTIF_DESCRIPTION = 'The side to move has a more advanced pair of friendly pawns on adjacent central files (c-d, d-e, or e-f) than any such opponent pawn phalanx, indicating central tension and space control.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    def best_phalanx(color):\n        by_rank = [set() for _ in range(8)]\n        for sq in b.pieces(chess.PAWN, color):\n            by_rank[chess.square_rank(sq)].add(chess.square_file(sq))\n        best = 0\n        for f in (2, 3, 4):\n            for r in range(8):\n                if f in by_rank[r] and (f + 1) in by_rank[r]:\n                    adv = r if color == chess.WHITE else 7 - r\n                    if adv > best:\n                        best = adv\n        return best\n    stm_best = best_phalanx(stm)\n    opp_best = best_phalanx(opp)\n    return stm_best >= 3 and stm_best > opp_best",
+      "delta": 0.023619999999999995
+    },
+    {
+      "id": "b34476c55be2c59c",
+      "name": "stm_attacks_hanging_opp_king_neighbor",
+      "description": "The side to move has at least one legal, non-sacrificial check or capture on a square adjacent to the opponent king.",
+      "source": "MOTIF_NAME = 'stm_attacks_hanging_opp_king_neighbor'\nMOTIF_DESCRIPTION = 'The side to move has at least one legal, non-sacrificial check or capture on a square adjacent to the opponent king.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    VAL = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 100}\n    oksq = b.king(opp)\n    if oksq is None:\n        return False\n    king_file = chess.square_file(oksq)\n    king_rank = chess.square_rank(oksq)\n    neighbors = []\n    for df in (-1, 0, 1):\n        for dr in (-1, 0, 1):\n            if df == 0 and dr == 0:\n                continue\n            nf = king_file + df\n            nr = king_rank + dr\n            if 0 <= nf < 8 and 0 <= nr < 8:\n                neighbors.append(chess.square(nf, nr))\n    opp_attackers_total = 0\n    for n in neighbors:\n        opp_attackers_total += len(b.attackers(opp, n))\n    for mv in b.legal_moves:\n        to = mv.to_square\n        atk = b.piece_at(mv.from_square)\n        if atk is None or atk.piece_type == chess.KING:\n            continue\n        if to not in neighbors:\n            continue\n        av = VAL[atk.piece_type]\n        capture = b.is_capture(mv)\n        dest_defended = bool(b.attackers(opp, to))\n        safe = True\n        consumed = set()\n        # roughly safe if undefended target is a pawn and attacker value <= 3, or target value+2 >= attacker value, or square undefended by non-pawn\n        if capture:\n            tp = b.piece_at(to)\n            if tp is not None:\n                tv = VAL.get(tp.piece_type, 0)\n                if dest_defended and av > tv:\n                    # sacrifice unless a friendly non-pawn can recapture cheaply by value\n                    rcok = False\n                    ra_count = 0\n                    for r in b.attackers(stm, to):\n                        rp = b.piece_at(r)\n                        if rp is None or r == mv.from_square:\n                            continue\n                        if rp.piece_type != chess.KING and VAL[rp.piece_type] <= av:\n                            rcok = True\n                            break\n                        ra_count += 1\n                    if not rcok:\n                        safe = False\n            elif dest_defended:\n                safe = False\n        else:\n            if dest_defended:\n                # quiet move to defended king-neighbor square is risky unless cheap piece\n                if av >= 3:\n                    safe = False\n        if safe:\n            return True\n    return False",
+      "delta": 0.02244
+    },
+    {
+      "id": "b18e9fb31b0718a9",
+      "name": "stm_attacks_opp_strong_piece_asymmetry",
+      "description": "The side to move has at least one safe attack by a non-pawn piece on an enemy non-pawn piece while the opponent has no safe non-pawn attack on the side-to-move non-pawn pieces.",
+      "source": "MOTIF_NAME = 'stm_attacks_opp_strong_piece_asymmetry'\nMOTIF_DESCRIPTION = 'The side to move has at least one safe attack by a non-pawn piece on an enemy non-pawn piece while the opponent has no safe non-pawn attack on the side-to-move non-pawn pieces.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    PV = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 100}\n\n    def nonpawns(color):\n        return (b.pieces(chess.KNIGHT, color) | b.pieces(chess.BISHOP, color) |\n                b.pieces(chess.ROOK, color) | b.pieces(chess.QUEEN, color))\n\n    def has_safe_attack(attacker_color, target_color):\n        for sq in nonpawns(target_color):\n            atks = b.attackers(attacker_color, sq)\n            if not atks:\n                continue\n            amin = min(PV[b.piece_at(a).piece_type] for a in atks if b.piece_at(a))\n            att = min(PV[b.piece_at(a).piece_type] for a in atks if b.piece_at(a))\n            ds = [PV[b.piece_at(d).piece_type] for d in b.attackers(target_color, sq) if b.piece_at(d)]\n            if att <= amin and att <= PV[b.piece_at(sq).piece_type] and (not ds or min(ds) > att):\n                return True\n        return False\n\n    return has_safe_attack(stm, opp) and not has_safe_attack(opp, stm)",
+      "delta": 0.014680000000000006
+    },
+    {
+      "id": "fb3a827fdf9fbf98",
+      "name": "stm_central_knight_outpost",
+      "description": "The side to move has a knight on a central square (files c-f, ranks 4-5) defended by a friendly pawn and not attackable by any enemy pawn.",
+      "source": "MOTIF_NAME = 'stm_central_knight_outpost'\nMOTIF_DESCRIPTION = 'The side to move has a knight on a central square (files c-f, ranks 4-5) defended by a friendly pawn and not attackable by any enemy pawn.'\ndef motif(fen: str) -> bool:\n    import chess\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    dir_up = 1 if stm else -1\n    for ksq in b.pieces(chess.KNIGHT, stm):\n        f, r = chess.square_file(ksq), chess.square_rank(ksq)\n        if not (2 <= f <= 5 and 3 <= r <= 4):\n            continue\n        supported = False\n        for df in (-1, 1):\n            nf, nr = f + df, r - dir_up\n            if 0 <= nf < 8 and 0 <= nr < 8:\n                p = b.piece_at(chess.square(nf, nr))\n                if p and p.color == stm and p.piece_type == chess.PAWN:\n                    supported = True\n                    break\n        if not supported:\n            continue\n        attacked = False\n        for df in (-1, 1):\n            nf, nr = f + df, r + dir_up\n            if 0 <= nf < 8 and 0 <= nr < 8:\n                p = b.piece_at(chess.square(nf, nr))\n                if p and p.color == opp and p.piece_type == chess.PAWN:\n                    attacked = True\n                    break\n        if not attacked:\n            return True\n    return False",
+      "delta": 0.014520000000000005
+    },
+    {
+      "id": "7596ab58e2529461",
+      "name": "stm_rook_uncontested_on_halfopen_file",
+      "description": "The side to move has a rook on a file with no friendly pawns where the opponent has no rook or queen on that file.",
+      "source": "MOTIF_NAME = 'stm_rook_uncontested_on_halfopen_file'\nMOTIF_DESCRIPTION = 'The side to move has a rook on a file with no friendly pawns where the opponent has no rook or queen on that file.'\nimport chess\n\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    for f in range(8):\n        stm_pawn_here = False\n        for r in range(8):\n            sq = chess.square(f, r)\n            p = b.piece_at(sq)\n            if p is not None and p.piece_type == chess.PAWN and p.color == stm:\n                stm_pawn_here = True\n                break\n        if stm_pawn_here:\n            continue\n        stm_has_rook = False\n        opp_has_major = False\n        for r in range(8):\n            sq = chess.square(f, r)\n            p = b.piece_at(sq)\n            if p is None:\n                continue\n            if p.color == stm and p.piece_type == chess.ROOK:\n                stm_has_rook = True\n            elif p.color == opp and p.piece_type in (chess.ROOK, chess.QUEEN):\n                opp_has_major = True\n        if stm_has_rook and not opp_has_major:\n            return True\n    return False",
+      "delta": 0.013890000000000013
+    },
+    {
+      "id": "0b14ee6bde9f3a66",
+      "name": "stm_backward_pawn_advantage",
+      "description": "The side to move has no backward pawns while the opponent has at least one backward pawn.",
+      "source": "import chess\n\nMOTIF_NAME = 'stm_backward_pawn_advantage'\nMOTIF_DESCRIPTION = 'The side to move has no backward pawns while the opponent has at least one backward pawn.'\n\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    \n    def has_backward(color):\n        r_dir = 1 if color == chess.WHITE else -1\n        for sq in list(b.pieces(chess.PAWN, color)):\n            f = chess.square_file(sq)\n            r = chess.square_rank(sq)\n            ar = r + r_dir\n            if not 0 <= ar < 8:\n                continue\n            advance_sq = chess.square(f, ar)\n            if b.piece_at(advance_sq) is not None:\n                continue\n            enemy_pawn_controls = False\n            for nf in (f - 1, f + 1):\n                if 0 <= nf < 8 and 0 <= ar + r_dir < 8:\n                    ep = b.piece_at(chess.square(nf, ar + r_dir))\n                    if ep and ep.color != color and ep.piece_type == chess.PAWN:\n                        enemy_pawn_controls = True\n                        break\n            if not enemy_pawn_controls:\n                continue\n            has_neighbor = False\n            backward = True\n            for nf in (f - 1, f + 1):\n                if 0 <= nf < 8:\n                    for nsq in list(b.pieces(chess.PAWN, color)):\n                        if chess.square_file(nsq) == nf:\n                            has_neighbor = True\n                            nr = chess.square_rank(nsq)\n                            if color == chess.WHITE and nr <= r:\n                                backward = False\n                            if color == chess.BLACK and nr >= r:\n                                backward = False\n            if has_neighbor and backward:\n                return True\n        return False\n\n    return not has_backward(stm) and has_backward(opp)",
+      "delta": 0.013370000000000007
+    },
+    {
+      "id": "e96f5a4d5b677596",
+      "name": "stm_active_major_in_opp_back_two_ranks",
+      "description": "The side to move has a rook or queen in the opponent's back two ranks attacking an enemy pawn while the opponent has no rook or queen in the side-to-move's back two ranks attacking side-to-move pawns.",
+      "source": "MOTIF_NAME = 'stm_active_major_in_opp_back_two_ranks'\nMOTIF_DESCRIPTION = \"The side to move has a rook or queen in the opponent's back two ranks attacking an enemy pawn while the opponent has no rook or queen in the side-to-move's back two ranks attacking side-to-move pawns.\"\ndef motif(fen: str) -> bool:\n    b = chess.Board(fen)\n    stm = b.turn\n    opp = not stm\n    if stm == chess.WHITE:\n        stm_ranks = {5, 6}\n        opp_ranks = {1, 2}\n    else:\n        stm_ranks = {1, 2}\n        opp_ranks = {5, 6}\n    def active_major_in_ranks(color, enemy_color, ranks):\n        ep = set(b.pieces(chess.PAWN, enemy_color))\n        for ptype in (chess.ROOK, chess.QUEEN):\n            for sq in b.pieces(ptype, color):\n                if chess.square_rank(sq) in ranks:\n                    for t in b.attacks(sq):\n                        if t in ep:\n                            return True\n        return False\n    return (active_major_in_ranks(stm, opp, stm_ranks) and\n            not active_major_in_ranks(opp, stm, opp_ranks))",
+      "delta": 0.010760000000000002
+    }
+  ],
+  "metadata": {
+    "library_id": "chess/glm-5.2",
+    "model": "GLM-5.2",
+    "run_id": "basis_api_runs/tokenfactory_chess_bp_direct_max64k_100it_c070_20260719_101413/chess_glm52",
+    "motif_count": 21,
+    "reasoning_profile": "max_64k_total",
+    "successful_iterations": 100,
+    "dataset": {
+      "id": "basis_stm_winning125to250_losing125to250_balanced_exact200k_stockfish18d12_20260625_v1",
+      "sha256": "6bedf361f6189bcbeafab33fc38ab45cde0c5fbfb8a82e04beb8070c4ab972fa",
+      "position_count": 200000,
+      "winning_count": 100000,
+      "losing_count": 100000,
+      "engine": "Stockfish 18",
+      "engine_depth": 12,
+      "winning_cp_stm": [
+        125,
+        250
+      ],
+      "losing_cp_stm": [
+        -250,
+        -125
+      ]
+    },
+    "score_definition": "P(motif=True | winning) - P(motif=True | losing), measured on the discovery training dataset.",
+    "manifest_sha256": "863da96ae908a1b8dfaeeb82f0d9fa11ef1e937a94b3d557101847328755aa6a",
+    "archive_model_key": "glm52",
+    "archive_model_name": "GLM-5.2",
+    "source_commit": "456f4b59535d5894689386d00f6ab3b4408ae669",
+    "inventory_sha256": "aa1fe7c64a50cfe588d2985a3e3fb1db90ebb568e9b3b130873b526d77a0586c",
+    "frozen_date": "2026-07-27",
+    "basis_directory": "basis_final",
+    "completion_status": "complete",
+    "motif_provenance": {
+      "4c5895b93706ee4f": {
+        "source_sha256": "4c5895b93706ee4f9c85145c0c5ff0aa4710d5d21b88fd8ce2af854d5f2a4dc7",
+        "rank": 1,
+        "discovery_index": 12,
+        "winning_true": 59105,
+        "losing_true": 24554,
+        "p_true_winning": 0.59105,
+        "p_true_losing": 0.24554
+      },
+      "a1bccdc125e52e8e": {
+        "source_sha256": "a1bccdc125e52e8e645951996e65ce38f1c878ebdfe0c3243239ed31cb236c0d",
+        "rank": 2,
+        "discovery_index": 2,
+        "winning_true": 16665,
+        "losing_true": 1364,
+        "p_true_winning": 0.16665,
+        "p_true_losing": 0.01364
+      },
+      "e727f042546280e3": {
+        "source_sha256": "e727f042546280e307408ce6a9c495c254843d21ea67cf1c0286860fc067f835",
+        "rank": 3,
+        "discovery_index": 9,
+        "winning_true": 32451,
+        "losing_true": 17200,
+        "p_true_winning": 0.32451,
+        "p_true_losing": 0.172
+      },
+      "76894146e010cc39": {
+        "source_sha256": "76894146e010cc39aebe9c2d809d9d118deceeaa62d0bd6c88f222a7f19ff2f5",
+        "rank": 4,
+        "discovery_index": 1,
+        "winning_true": 35857,
+        "losing_true": 22897,
+        "p_true_winning": 0.35857,
+        "p_true_losing": 0.22897
+      },
+      "727bd2943aa00c42": {
+        "source_sha256": "727bd2943aa00c42bbd181e8ca6846ebe0be411194c481b9a1e05e409a5b690c",
+        "rank": 5,
+        "discovery_index": 5,
+        "winning_true": 40859,
+        "losing_true": 29911,
+        "p_true_winning": 0.40859,
+        "p_true_losing": 0.29911
+      },
+      "e5adf946e09fb725": {
+        "source_sha256": "e5adf946e09fb7251eac8e05882ceb71341e0f8a8bfda782d33b7bf9d3218f90",
+        "rank": 6,
+        "discovery_index": 10,
+        "winning_true": 25270,
+        "losing_true": 19831,
+        "p_true_winning": 0.2527,
+        "p_true_losing": 0.19831
+      },
+      "69b9bfeefd8c568e": {
+        "source_sha256": "69b9bfeefd8c568e5d03dbfff49252058ecb0c6202c711e8a0c3b088c2db7edb",
+        "rank": 7,
+        "discovery_index": 14,
+        "winning_true": 24786,
+        "losing_true": 19940,
+        "p_true_winning": 0.24786,
+        "p_true_losing": 0.1994
+      },
+      "a6515f1ea1037121": {
+        "source_sha256": "a6515f1ea10371213e05dfa99e3e94bec7dfe0ffccacc7eb5ff37020193da1ef",
+        "rank": 8,
+        "discovery_index": 17,
+        "winning_true": 9889,
+        "losing_true": 6115,
+        "p_true_winning": 0.09889,
+        "p_true_losing": 0.06115
+      },
+      "91db72174776d3f6": {
+        "source_sha256": "91db72174776d3f60c938f287b795416d479873d717d4146b90d0cae7655f068",
+        "rank": 9,
+        "discovery_index": 3,
+        "winning_true": 14512,
+        "losing_true": 10879,
+        "p_true_winning": 0.14512,
+        "p_true_losing": 0.10879
+      },
+      "579118751980e13b": {
+        "source_sha256": "579118751980e13b10f7455f66f36115875dccbc1ef807e597d388dade15fbe1",
+        "rank": 10,
+        "discovery_index": 15,
+        "winning_true": 17691,
+        "losing_true": 14201,
+        "p_true_winning": 0.17691,
+        "p_true_losing": 0.14201
+      },
+      "ff7b345a0f4ae1a1": {
+        "source_sha256": "ff7b345a0f4ae1a124026e76d997b3cec38e22405440fd3569e808208afe36b7",
+        "rank": 11,
+        "discovery_index": 8,
+        "winning_true": 8036,
+        "losing_true": 4963,
+        "p_true_winning": 0.08036,
+        "p_true_losing": 0.04963
+      },
+      "5e75c8c8a299cb34": {
+        "source_sha256": "5e75c8c8a299cb34384d6f66465e55beeab94c275498103a7782342ba3ca596f",
+        "rank": 12,
+        "discovery_index": 0,
+        "winning_true": 17758,
+        "losing_true": 15148,
+        "p_true_winning": 0.17758,
+        "p_true_losing": 0.15148
+      },
+      "bcaa9aa0a2d2080d": {
+        "source_sha256": "bcaa9aa0a2d2080d8b47edd4ad75a3fac88eb66b4a55d9156ff85977541c4d6d",
+        "rank": 13,
+        "discovery_index": 19,
+        "winning_true": 5949,
+        "losing_true": 3405,
+        "p_true_winning": 0.05949,
+        "p_true_losing": 0.03405
+      },
+      "bcf01e6a7f9bbcbd": {
+        "source_sha256": "bcf01e6a7f9bbcbdff99f9f32bd08c79ddcc75a6190543d295cffa76f1942b3a",
+        "rank": 14,
+        "discovery_index": 18,
+        "winning_true": 8926,
+        "losing_true": 6560,
+        "p_true_winning": 0.08926,
+        "p_true_losing": 0.0656
+      },
+      "b854d191db96b604": {
+        "source_sha256": "b854d191db96b604f6a7d066f4cfe529f894b9d7051011bdcc7f1147fa1ddf84",
+        "rank": 15,
+        "discovery_index": 11,
+        "winning_true": 6834,
+        "losing_true": 4472,
+        "p_true_winning": 0.06834,
+        "p_true_losing": 0.04472
+      },
+      "b34476c55be2c59c": {
+        "source_sha256": "b34476c55be2c59c56d41184a74cd2743ae83e0e3fb191d08915694a84aa7dfa",
+        "rank": 16,
+        "discovery_index": 20,
+        "winning_true": 6607,
+        "losing_true": 4363,
+        "p_true_winning": 0.06607,
+        "p_true_losing": 0.04363
+      },
+      "b18e9fb31b0718a9": {
+        "source_sha256": "b18e9fb31b0718a9574b5ad1c604eb62362f317bb55d25ae3286cdde0c530dbc",
+        "rank": 17,
+        "discovery_index": 13,
+        "winning_true": 7452,
+        "losing_true": 5984,
+        "p_true_winning": 0.07452,
+        "p_true_losing": 0.05984
+      },
+      "fb3a827fdf9fbf98": {
+        "source_sha256": "fb3a827fdf9fbf981e584b6b73d679b1137c8bfaadaff8e3399c18cd58720e15",
+        "rank": 18,
+        "discovery_index": 7,
+        "winning_true": 8390,
+        "losing_true": 6938,
+        "p_true_winning": 0.0839,
+        "p_true_losing": 0.06938
+      },
+      "7596ab58e2529461": {
+        "source_sha256": "7596ab58e2529461f10a953204e60f348aa92bfcaffacbd8cfd0b7a958e21ae6",
+        "rank": 19,
+        "discovery_index": 4,
+        "winning_true": 32439,
+        "losing_true": 31050,
+        "p_true_winning": 0.32439,
+        "p_true_losing": 0.3105
+      },
+      "0b14ee6bde9f3a66": {
+        "source_sha256": "0b14ee6bde9f3a6641d962d724f302c75ceb0add6e8b13f46f1bfd3653f1db6c",
+        "rank": 20,
+        "discovery_index": 6,
+        "winning_true": 8844,
+        "losing_true": 7507,
+        "p_true_winning": 0.08844,
+        "p_true_losing": 0.07507
+      },
+      "e96f5a4d5b677596": {
+        "source_sha256": "e96f5a4d5b677596e24cedeeb16e9490ad915f63b5ff0bcbf4f6543ab30d94cf",
+        "rank": 21,
+        "discovery_index": 16,
+        "winning_true": 3411,
+        "losing_true": 2335,
+        "p_true_winning": 0.03411,
+        "p_true_losing": 0.02335
+      }
+    }
+  }
+}

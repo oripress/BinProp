@@ -1,0 +1,480 @@
+{
+  "schema_version": 1,
+  "game": "go",
+  "motifs": [
+    {
+      "id": "4fdbea77f2d85931",
+      "name": "local stone density territory",
+      "description": "Empty points whose surrounding 7x7 neighborhood holds at least two more own than enemy stones count as own territory in a komi-adjusted area estimate.",
+      "source": "MOTIF_NAME = 'local stone density territory'\nMOTIF_DESCRIPTION = 'Empty points whose surrounding 7x7 neighborhood holds at least two more own than enemy stones count as own territory in a komi-adjusted area estimate.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    ps_o = [[0] * 20]\n    ps_x = [[0] * 20]\n    for r in range(19):\n        row = board_rows[r]\n        prev_o = ps_o[r]\n        prev_x = ps_x[r]\n        cur_o = [0] * 20\n        cur_x = [0] * 20\n        acc_o = 0\n        acc_x = 0\n        for c in range(19):\n            s = row[c]\n            if s == color:\n                acc_o += 1\n            elif s == opp:\n                acc_x += 1\n            cur_o[c + 1] = prev_o[c + 1] + acc_o\n            cur_x[c + 1] = prev_x[c + 1] + acc_x\n        ps_o.append(cur_o)\n        ps_x.append(cur_x)\n    score = 0\n    for r in range(19):\n        row = board_rows[r]\n        r1 = r - 3\n        if r1 < 0:\n            r1 = 0\n        r2 = r + 4\n        if r2 > 19:\n            r2 = 19\n        ao = ps_o[r1]\n        bo = ps_o[r2]\n        ax = ps_x[r1]\n        bx = ps_x[r2]\n        for c in range(19):\n            s = row[c]\n            if s == color:\n                score += 1\n            elif s == opp:\n                score -= 1\n            else:\n                c1 = c - 3\n                if c1 < 0:\n                    c1 = 0\n                c2 = c + 4\n                if c2 > 19:\n                    c2 = 19\n                d = bo[c2] - ao[c2] - bo[c1] + ao[c1] - (bx[c2] - ax[c2] - bx[c1] + ax[c1])\n                if d >= 2:\n                    score += 1\n                elif d <= -2:\n                    score -= 1\n    if color == 'W':\n        score += 7.5\n    else:\n        score -= 7.5\n    return score >= 0",
+      "delta": 0.09143000000000001
+    },
+    {
+      "id": "d11b9e0feb4b48c0",
+      "name": "decay influence territory",
+      "description": "Each empty point goes to the side whose distance-decayed influence from stones within Manhattan distance four is clearly larger, and the evaluated side leads the resulting komi-adjusted area estimate.",
+      "source": "MOTIF_NAME = 'decay influence territory'\nMOTIF_DESCRIPTION = 'Each empty point goes to the side whose distance-decayed influence from stones within Manhattan distance four is clearly larger, and the evaluated side leads the resulting komi-adjusted area estimate.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    n_own = 0\n    n_opp = 0\n    p_own = 0\n    p_opp = 0\n    for r in range(19):\n        for c in range(19):\n            s = br[r][c]\n            if s == color:\n                n_own += 1\n                continue\n            if s == opp:\n                n_opp += 1\n                continue\n            io = 0\n            io_ = 0\n            for dr in range(-4, 5):\n                rr = r + dr\n                if rr < 0 or rr > 18:\n                    continue\n                ad = dr if dr >= 0 else -dr\n                rem = 4 - ad\n                row = br[rr]\n                lo = c - rem\n                hi = c + rem\n                if lo < 0:\n                    lo = 0\n                if hi > 18:\n                    hi = 18\n                for cc in range(lo, hi + 1):\n                    t = row[cc]\n                    if t == '.':\n                        continue\n                    d = ad + (cc - c if cc >= c else c - cc)\n                    if d == 0:\n                        continue\n                    w = 1 << (4 - d)\n                    if t == color:\n                        io += w\n                    else:\n                        io_ += w\n            if io >= io_ + 2:\n                p_own += 1\n            elif io_ >= io + 2:\n                p_opp += 1\n    lead = n_own + p_own - n_opp - p_opp\n    if color == 'W':\n        lead += 7\n    else:\n        lead -= 7\n    return lead >= 5",
+      "delta": 0.07573000000000002
+    },
+    {
+      "id": "d6de0895d4b0de06",
+      "name": "power border territory",
+      "description": "Each connected empty region is owned by the side whose bordering stones have more group-liberty weight (capped at six) with a margin, and the evaluated side leads the resulting komi-adjusted area estimate.",
+      "source": "MOTIF_NAME = 'power border territory'\nMOTIF_DESCRIPTION = 'Each connected empty region is owned by the side whose bordering stones have more group-liberty weight (capped at six) with a margin, and the evaluated side leads the resulting komi-adjusted area estimate.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    gid = [-1] * 361\n    glib = []\n    own_s = 0\n    opp_s = 0\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.':\n                continue\n            if s == color:\n                own_s += 1\n            else:\n                opp_s += 1\n            if gid[i] >= 0:\n                continue\n            g = len(glib)\n            gid[i] = g\n            st = [i]\n            libs = set()\n            while st:\n                x = st.pop()\n                rr = x // 19\n                cc = x - rr * 19\n                for k in (-19 if rr else 0, 19 if rr < 18 else 0, -1 if cc else 0, 1 if cc < 18 else 0):\n                    if not k:\n                        continue\n                    y = x + k\n                    t = br[y // 19][y % 19]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        libs.add(y)\n            glib.append(min(len(libs), 6))\n    rid = [-1] * 361\n    rsize = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            if br[r][c] != '.' or rid[i] >= 0:\n                continue\n            g = len(rsize)\n            rid[i] = g\n            st = [i]\n            n = 0\n            while st:\n                x = st.pop()\n                n += 1\n                rr = x // 19\n                cc = x - rr * 19\n                for k in (-19 if rr else 0, 19 if rr < 18 else 0, -1 if cc else 0, 1 if cc < 18 else 0):\n                    if k:\n                        y = x + k\n                        if br[y // 19][y % 19] == '.' and rid[y] < 0:\n                            rid[y] = g\n                            st.append(y)\n            rsize.append(n)\n    wo = [0] * len(rsize)\n    we = [0] * len(rsize)\n    for r in range(19):\n        for c in range(19):\n            if br[r][c] != '.':\n                continue\n            g = rid[r * 19 + c]\n            for k in (-19 if r else 0, 19 if r < 18 else 0, -1 if c else 0, 1 if c < 18 else 0):\n                if not k:\n                    continue\n                y = r * 19 + c + k\n                t = br[y // 19][y % 19]\n                if t != '.':\n                    w = glib[gid[y]]\n                    if t == color:\n                        wo[g] += w\n                    else:\n                        we[g] += w\n    own_t = 0\n    opp_t = 0\n    for g in range(len(rsize)):\n        if wo[g] >= we[g] + 5:\n            own_t += rsize[g]\n        elif we[g] >= wo[g] + 5:\n            opp_t += rsize[g]\n    lead = own_s + own_t - opp_s - opp_t\n    lead += 7 if color == 'W' else -7\n    return lead >= 5",
+      "delta": 0.07086000000000003
+    },
+    {
+      "id": "6161ef793640979e",
+      "name": "besieged group imbalance",
+      "description": "The opponent has more stones in groups that are in atari, down to two liberties, or fully surrounded by enemy stones than the evaluated side does.",
+      "source": "MOTIF_NAME = 'besieged group imbalance'\nMOTIF_DESCRIPTION = 'The opponent has more stones in groups that are in atari, down to two liberties, or fully surrounded by enemy stones than the evaluated side does.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    br = board_rows\n    gid = [-1] * 361\n    sizes = []\n    libs = []\n    cols = []\n    for r in range(19):\n        for c in range(19):\n            s = br[r][c]\n            if s != '.' and gid[r * 19 + c] < 0:\n                g = len(sizes)\n                cols.append(s)\n                sizes.append(0)\n                libs.append(set())\n                i0 = r * 19 + c\n                gid[i0] = g\n                stack = [i0]\n                while stack:\n                    i = stack.pop()\n                    sizes[g] += 1\n                    rr = i // 19\n                    cc = i - rr * 19\n                    if rr > 0:\n                        j = i - 19\n                        ns = br[rr - 1][cc]\n                        if ns == s:\n                            if gid[j] < 0:\n                                gid[j] = g\n                                stack.append(j)\n                        elif ns == '.':\n                            libs[g].add(j)\n                    if rr < 18:\n                        j = i + 19\n                        ns = br[rr + 1][cc]\n                        if ns == s:\n                            if gid[j] < 0:\n                                gid[j] = g\n                                stack.append(j)\n                        elif ns == '.':\n                            libs[g].add(j)\n                    if cc > 0:\n                        j = i - 1\n                        ns = br[rr][cc - 1]\n                        if ns == s:\n                            if gid[j] < 0:\n                                gid[j] = g\n                                stack.append(j)\n                        elif ns == '.':\n                            libs[g].add(j)\n                    if cc < 18:\n                        j = i + 1\n                        ns = br[rr][cc + 1]\n                        if ns == s:\n                            if gid[j] < 0:\n                                gid[j] = g\n                                stack.append(j)\n                        elif ns == '.':\n                            libs[g].add(j)\n    weak_own = 0\n    weak_opp = 0\n    for g in range(len(sizes)):\n        col = cols[g]\n        enemy = 'W' if col == 'B' else 'B'\n        L = libs[g]\n        weak = len(L) <= 2\n        if not weak:\n            weak = True\n            for j in L:\n                rr = j // 19\n                cc = j - rr * 19\n                near = False\n                if rr > 0 and br[rr - 1][cc] == enemy:\n                    near = True\n                elif rr < 18 and br[rr + 1][cc] == enemy:\n                    near = True\n                if not near and cc > 0 and br[rr][cc - 1] == enemy:\n                    near = True\n                elif not near and cc < 18 and br[rr][cc + 1] == enemy:\n                    near = True\n                if not near:\n                    weak = False\n                    break\n        if weak:\n            if col == color:\n                weak_own += sizes[g]\n            else:\n                weak_opp += sizes[g]\n    return weak_opp - weak_own >= 2",
+      "delta": 0.06724999999999998
+    },
+    {
+      "id": "621fdb83357073b0",
+      "name": "favorable contact fights",
+      "description": "Along each boundary between an evaluated-side group and an opponent group where at least one side has under six liberties, the evaluated side more often holds the liberty lead.",
+      "source": "MOTIF_NAME = 'favorable contact fights'\nMOTIF_DESCRIPTION = 'Along each boundary between an evaluated-side group and an opponent group where at least one side has under six liberties, the evaluated side more often holds the liberty lead.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    gid = [-1] * 361\n    libs = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(libs)\n            libs.append(set())\n            gid[i] = g\n            st = [i]\n            while st:\n                x = st.pop()\n                rr = x // 19\n                cc = x - rr * 19\n                for k in (-19 if rr else 0, 19 if rr < 18 else 0, -1 if cc else 0, 1 if cc < 18 else 0):\n                    if not k:\n                        continue\n                    y = x + k\n                    t = br[y // 19][y % 19]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        libs[g].add(y)\n    libn = [len(s) for s in libs]\n    total = 0\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            if br[r][c] != color:\n                continue\n            for j in ((i + 1) if c < 18 else -1, (i + 19) if r < 18 else -1):\n                if j < 0:\n                    continue\n                t = br[j // 19][j % 19]\n                if t == '.' or t == color:\n                    continue\n                a = libn[gid[i]]\n                b = libn[gid[j]]\n                if a >= 6 and b >= 6:\n                    continue\n                if a > b:\n                    total += 1\n                elif a < b:\n                    total -= 1\n    return total >= 4",
+      "delta": 0.059240000000000015
+    },
+    {
+      "id": "9d9a6dafcd3a9952",
+      "name": "locally outnumbered stone imbalance",
+      "description": "Stones whose surrounding 3x3 neighborhood contains at least two more enemy stones than friendly stones are locally overwhelmed, and the opponent has clearly more such overwhelmed stones than the evaluated side.",
+      "source": "MOTIF_NAME = 'locally outnumbered stone imbalance'\nMOTIF_DESCRIPTION = 'Stones whose surrounding 3x3 neighborhood contains at least two more enemy stones than friendly stones are locally overwhelmed, and the opponent has clearly more such overwhelmed stones than the evaluated side.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    own_bad = 0\n    opp_bad = 0\n    for r in range(19):\n        row = br[r]\n        r0 = r - 1 if r else 0\n        r1 = r + 2 if r < 18 else 19\n        for c in range(19):\n            s = row[c]\n            if s == '.':\n                continue\n            c0 = c - 1 if c else 0\n            c1 = c + 2 if c < 18 else 19\n            own = 0\n            foe = 0\n            for rr in range(r0, r1):\n                nrow = br[rr]\n                for cc in range(c0, c1):\n                    if rr == r and cc == c:\n                        continue\n                    t = nrow[cc]\n                    if t == s:\n                        own += 1\n                    elif t != '.':\n                        foe += 1\n            if foe - own >= 2:\n                if s == color:\n                    own_bad += 1\n                else:\n                    opp_bad += 1\n    return opp_bad - own_bad >= 3",
+      "delta": 0.05754000000000001
+    },
+    {
+      "id": "e4de55622154b577",
+      "name": "capture ledger advantage",
+      "description": "Because players alternate moves, a surplus of evaluated-side stones on the board means the evaluated side has captured more enemy stones than it has lost, and a clearly positive capture ledger favors the evaluated side.",
+      "source": "MOTIF_NAME = 'capture ledger advantage'\nMOTIF_DESCRIPTION = 'Because players alternate moves, a surplus of evaluated-side stones on the board means the evaluated side has captured more enemy stones than it has lost, and a clearly positive capture ledger favors the evaluated side.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    own = 0\n    opp = 0\n    for row in board_rows:\n        for s in row:\n            if s == '.':\n                continue\n            if s == color:\n                own += 1\n            else:\n                opp += 1\n    return own - opp >= 2",
+      "delta": 0.04071000000000001
+    },
+    {
+      "id": "0c7e0387e6ee842f",
+      "name": "strong cutting stones advantage",
+      "description": "Stones belonging to groups with at least four liberties that touch two or more separate enemy groups are powerful cutting stones, and the evaluated side has more of them than the opponent.",
+      "source": "MOTIF_NAME = 'strong cutting stones advantage'\nMOTIF_DESCRIPTION = 'Stones belonging to groups with at least four liberties that touch two or more separate enemy groups are powerful cutting stones, and the evaluated side has more of them than the opponent.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    gid = [-1] * 361\n    glib = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(glib)\n            gid[i] = g\n            st = [i]\n            lib = set()\n            while st:\n                x = st.pop()\n                rr = x // 19\n                cc = x - rr * 19\n                if rr:\n                    y = x - 19\n                    t = br[rr - 1][cc]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        lib.add(y)\n                if rr < 18:\n                    y = x + 19\n                    t = br[rr + 1][cc]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        lib.add(y)\n                if cc:\n                    y = x - 1\n                    t = br[rr][cc - 1]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        lib.add(y)\n                if cc < 18:\n                    y = x + 1\n                    t = br[rr][cc + 1]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        lib.add(y)\n            glib.append(len(lib))\n    own_cut = 0\n    opp_cut = 0\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or glib[gid[i]] < 4:\n                continue\n            eg = set()\n            if r:\n                t = br[r - 1][c]\n                if t != '.' and t != s:\n                    eg.add(gid[i - 19])\n            if r < 18:\n                t = br[r + 1][c]\n                if t != '.' and t != s:\n                    eg.add(gid[i + 19])\n            if c:\n                t = br[r][c - 1]\n                if t != '.' and t != s:\n                    eg.add(gid[i - 1])\n            if c < 18:\n                t = br[r][c + 1]\n                if t != '.' and t != s:\n                    eg.add(gid[i + 1])\n            if len(eg) >= 2:\n                if s == color:\n                    own_cut += 1\n                else:\n                    opp_cut += 1\n    return own_cut - opp_cut >= 2",
+      "delta": 0.03867000000000004
+    },
+    {
+      "id": "a74d2d707059d5bf",
+      "name": "isolated fighting stones imbalance",
+      "description": "A stone with no friendly stone anywhere in its 3x3 neighborhood but at least one enemy stone within Manhattan distance two is a stranded fighting stone, and the opponent has clearly more such stranded stones than the evaluated side.",
+      "source": "MOTIF_NAME = 'isolated fighting stones imbalance'\nMOTIF_DESCRIPTION = 'A stone with no friendly stone anywhere in its 3x3 neighborhood but at least one enemy stone within Manhattan distance two is a stranded fighting stone, and the opponent has clearly more such stranded stones than the evaluated side.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    iso_own = 0\n    iso_opp = 0\n    for r in range(19):\n        for c in range(19):\n            s = br[r][c]\n            if s == '.':\n                continue\n            friendly = False\n            for dr in (-1, 0, 1):\n                for dc in (-1, 0, 1):\n                    if dr == 0 and dc == 0:\n                        continue\n                    rr = r + dr\n                    cc = c + dc\n                    if 0 <= rr < 19 and 0 <= cc < 19 and br[rr][cc] == s:\n                        friendly = True\n                        break\n                if friendly:\n                    break\n            if friendly:\n                continue\n            enemy_close = False\n            for dr, dc in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1), (2, 0), (-2, 0), (0, 2), (0, -2)):\n                rr = r + dr\n                cc = c + dc\n                if 0 <= rr < 19 and 0 <= cc < 19:\n                    t = br[rr][cc]\n                    if t != '.' and t != s:\n                        enemy_close = True\n                        break\n            if enemy_close:\n                if s == color:\n                    iso_own += 1\n                else:\n                    iso_opp += 1\n    return iso_opp - iso_own >= 3",
+      "delta": 0.03505000000000001
+    },
+    {
+      "id": "27e8d4be56b2a2c8",
+      "name": "head hit pressure advantage",
+      "description": "An own stone placed directly in front of an enemy line of two or more stones strikes its head and blocks its advance, a powerful attacking shape, and the evaluated side lands clearly more of these head hits (with longer blocked runs counting double) than the opponent.",
+      "source": "MOTIF_NAME = 'head hit pressure advantage'\nMOTIF_DESCRIPTION = 'An own stone placed directly in front of an enemy line of two or more stones strikes its head and blocks its advance, a powerful attacking shape, and the evaluated side lands clearly more of these head hits (with longer blocked runs counting double) than the opponent.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    own = 0\n    foe = 0\n    for r in range(19):\n        row = br[r]\n        for c in range(19):\n            s = row[c]\n            if s == '.':\n                continue\n            e = 'W' if s == 'B' else 'B'\n            h = 0\n            for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):\n                r1 = r + dr\n                c1 = c + dc\n                r2 = r1 + dr\n                c2 = c1 + dc\n                if 0 <= r2 < 19 and 0 <= c2 < 19 and br[r1][c1] == e and br[r2][c2] == e:\n                    h += 1\n                    r3 = r2 + dr\n                    c3 = c2 + dc\n                    if 0 <= r3 < 19 and 0 <= c3 < 19 and br[r3][c3] == e:\n                        h += 1\n            if s == color:\n                own += h\n            else:\n                foe += h\n    return own - foe >= 3",
+      "delta": 0.03426000000000001
+    },
+    {
+      "id": "cb85ac07d02beb02",
+      "name": "strength mismatch pressure",
+      "description": "Stones in groups with at most three liberties that sit next to an enemy group with five or more liberties are crushed by superior force, and the opponent having clearly more such overmatched stones than the evaluated side signals a winning fight balance.",
+      "source": "MOTIF_NAME = 'strength mismatch pressure'\nMOTIF_DESCRIPTION = 'Stones in groups with at most three liberties that sit next to an enemy group with five or more liberties are crushed by superior force, and the opponent having clearly more such overmatched stones than the evaluated side signals a winning fight balance.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    gid = [-1] * 361\n    gcol = []\n    gsize = []\n    glib = []\n    for r in range(19):\n        row = br[r]\n        for c in range(19):\n            i = r * 19 + c\n            s = row[c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(gcol)\n            gid[i] = g\n            gcol.append(s)\n            st = [i]\n            libs = set()\n            size = 0\n            while st:\n                x = st.pop()\n                size += 1\n                rr = x // 19\n                cc = x % 19\n                for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):\n                    yr = rr + dr\n                    yc = cc + dc\n                    if 0 <= yr < 19 and 0 <= yc < 19:\n                        y = yr * 19 + yc\n                        t = br[yr][yc]\n                        if t == '.':\n                            libs.add(y)\n                        elif t == s and gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n            gsize.append(size)\n            glib.append(len(libs))\n    n = len(gcol)\n    foe_pressed = [False] * n\n    own_pressed = [False] * n\n    pairs = set()\n    for r in range(19):\n        for c in range(19):\n            s = br[r][c]\n            if s == '.':\n                continue\n            a = gid[r * 19 + c]\n            for dr, dc in ((1, 0), (0, 1)):\n                yr = r + dr\n                yc = c + dc\n                if yr < 19 and yc < 19:\n                    t = br[yr][yc]\n                    if t != '.' and t != s:\n                        b = gid[yr * 19 + yc]\n                        if a != b:\n                            pairs.add((a, b) if a < b else (b, a))\n    for a, b in pairs:\n        if gcol[a] == color:\n            o, f = a, b\n        else:\n            o, f = b, a\n        if glib[o] >= 5 and glib[f] <= 3:\n            foe_pressed[f] = True\n        if glib[f] >= 5 and glib[o] <= 3:\n            own_pressed[o] = True\n    foe_t = 0\n    own_t = 0\n    for g in range(n):\n        if foe_pressed[g] and gcol[g] != color:\n            foe_t += gsize[g]\n        elif own_pressed[g] and gcol[g] == color:\n            own_t += gsize[g]\n    return foe_t - own_t >= 4",
+      "delta": 0.03397
+    },
+    {
+      "id": "37ae2aedf6e42b82",
+      "name": "pressed low line stones imbalance",
+      "description": "A stone stuck on the first or second line with an enemy stone directly inward is crawling low, an inefficient shape that yields little territory, and the opponent owning clearly more such pressed-low stones than the evaluated side signals a good exchange.",
+      "source": "MOTIF_NAME = 'pressed low line stones imbalance'\nMOTIF_DESCRIPTION = 'A stone stuck on the first or second line with an enemy stone directly inward is crawling low, an inefficient shape that yields little territory, and the opponent owning clearly more such pressed-low stones than the evaluated side signals a good exchange.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    own = 0\n    foe = 0\n    for r in range(19):\n        row = br[r]\n        for c in range(19):\n            s = row[c]\n            if s == '.':\n                continue\n            e = 'W' if s == 'B' else 'B'\n            pressed = False\n            if r == 0 and br[1][c] == e:\n                pressed = True\n            elif r == 1 and br[2][c] == e:\n                pressed = True\n            elif r == 17 and br[16][c] == e:\n                pressed = True\n            elif r == 18 and br[17][c] == e:\n                pressed = True\n            if c == 0 and row[1] == e:\n                pressed = True\n            elif c == 1 and row[2] == e:\n                pressed = True\n            elif c == 17 and row[16] == e:\n                pressed = True\n            elif c == 18 and row[17] == e:\n                pressed = True\n            if pressed:\n                if s == color:\n                    own += 1\n                else:\n                    foe += 1\n    return foe - own >= 2",
+      "delta": 0.032310000000000005
+    },
+    {
+      "id": "eff396bd05ce5383",
+      "name": "secure center weight advantage",
+      "description": "Stones near the board center in groups with at least three liberties radiate influence, and a clearly larger center-weighted tally of such secure stones for the evaluated side signals control of the middle game.",
+      "source": "MOTIF_NAME = 'secure center weight advantage'\nMOTIF_DESCRIPTION = 'Stones near the board center in groups with at least three liberties radiate influence, and a clearly larger center-weighted tally of such secure stones for the evaluated side signals control of the middle game.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    gid = [-1] * 361\n    glib = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(glib)\n            gid[i] = g\n            st = [i]\n            libs = set()\n            while st:\n                x = st.pop()\n                rr = x // 19\n                cc = x % 19\n                for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):\n                    yr = rr + dr\n                    yc = cc + dc\n                    if 0 <= yr < 19 and 0 <= yc < 19:\n                        y = yr * 19 + yc\n                        t = br[yr][yc]\n                        if t == '.':\n                            libs.add(y)\n                        elif t == s and gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n            glib.append(len(libs))\n    own = 0\n    foe = 0\n    for r in range(19):\n        dr_ = r - 9\n        if dr_ < 0:\n            dr_ = -dr_\n        row = br[r]\n        for c in range(19):\n            s = row[c]\n            if s == '.':\n                continue\n            dc_ = c - 9\n            if dc_ < 0:\n                dc_ = -dc_\n            w = 6 - (dr_ + dc_)\n            if w <= 0:\n                continue\n            if glib[gid[r * 19 + c]] < 3:\n                continue\n            if s == color:\n                own += w\n            else:\n                foe += w\n    return own - foe >= 8",
+      "delta": 0.029980000000000007
+    },
+    {
+      "id": "f2ca8e1ce7336a84",
+      "name": "empty triangle inefficiency imbalance",
+      "description": "A 2x2 block containing exactly three stones of one color plus one empty point is an inefficient empty-triangle shape, and the opponent forms clearly more of these bad shapes than the evaluated side.",
+      "source": "MOTIF_NAME = 'empty triangle inefficiency imbalance'\nMOTIF_DESCRIPTION = 'A 2x2 block containing exactly three stones of one color plus one empty point is an inefficient empty-triangle shape, and the opponent forms clearly more of these bad shapes than the evaluated side.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    own = 0\n    opp = 0\n    for r in range(18):\n        up = br[r]\n        dn = br[r + 1]\n        for c in range(18):\n            nb = (up[c] == 'B') + (up[c + 1] == 'B') + (dn[c] == 'B') + (dn[c + 1] == 'B')\n            nw = (up[c] == 'W') + (up[c + 1] == 'W') + (dn[c] == 'W') + (dn[c + 1] == 'W')\n            if (nb == 3 and nw == 0) or (nw == 3 and nb == 0):\n                if ('B' if nb == 3 else 'W') == color:\n                    own += 1\n                else:\n                    opp += 1\n    return opp - own >= 3",
+      "delta": 0.02865000000000001
+    },
+    {
+      "id": "bf448ece79a454bd",
+      "name": "capture weighted area",
+      "description": "Groups in atari or with at most three liberties touching only one tiny empty region are treated as captured, and the evaluated side leads a komi-adjusted area estimate counting sealed regions (ignoring dead stones) plus double the dead-stone swing.",
+      "source": "MOTIF_NAME = 'capture weighted area'\nMOTIF_DESCRIPTION = 'Groups in atari or with at most three liberties touching only one tiny empty region are treated as captured, and the evaluated side leads a komi-adjusted area estimate counting sealed regions (ignoring dead stones) plus double the dead-stone swing.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    rid = [-1] * 361\n    rsize = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            if br[r][c] != '.' or rid[i] >= 0:\n                continue\n            g = len(rsize)\n            rid[i] = g\n            st = [i]\n            n = 0\n            while st:\n                x = st.pop()\n                n += 1\n                rr = x // 19\n                cc = x - rr * 19\n                for k in (-19 if rr else 0, 19 if rr < 18 else 0, -1 if cc else 0, 1 if cc < 18 else 0):\n                    if k:\n                        y = x + k\n                        if br[y // 19][y % 19] == '.' and rid[y] < 0:\n                            rid[y] = g\n                            st.append(y)\n            rsize.append(n)\n    dead = [False] * 361\n    gid = [-1] * 361\n    own_s = 0\n    opp_s = 0\n    dead_o = 0\n    dead_e = 0\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.':\n                continue\n            if s == color:\n                own_s += 1\n            else:\n                opp_s += 1\n            if gid[i] >= 0:\n                continue\n            gid[i] = i\n            st = [i]\n            mem = [i]\n            libs = set()\n            regs = set()\n            while st:\n                x = st.pop()\n                rr = x // 19\n                cc = x - rr * 19\n                for k in (-19 if rr else 0, 19 if rr < 18 else 0, -1 if cc else 0, 1 if cc < 18 else 0):\n                    if not k:\n                        continue\n                    y = x + k\n                    t = br[y // 19][y % 19]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = i\n                            st.append(y)\n                            mem.append(y)\n                    elif t == '.':\n                        libs.add(y)\n                        regs.add(rid[y])\n            nl = len(libs)\n            mx = 0\n            for g in regs:\n                if rsize[g] > mx:\n                    mx = rsize[g]\n            if nl <= 1 or (nl <= 3 and mx <= 2 and len(regs) == 1):\n                if s == color:\n                    dead_o += len(mem)\n                else:\n                    dead_e += len(mem)\n                for x in mem:\n                    dead[x] = True\n    adj2 = [0] * len(rsize)\n    for r in range(19):\n        for c in range(19):\n            if br[r][c] != '.':\n                continue\n            g = rid[r * 19 + c]\n            a = adj2[g]\n            for k in (-19 if r else 0, 19 if r < 18 else 0, -1 if c else 0, 1 if c < 18 else 0):\n                if not k:\n                    continue\n                y = r * 19 + c + k\n                t = br[y // 19][y % 19]\n                if t != '.' and not dead[y]:\n                    a |= 1 if t == color else 2\n            adj2[g] = a\n    own_t = 0\n    opp_t = 0\n    for g in range(len(rsize)):\n        if adj2[g] == 1:\n            own_t += rsize[g]\n        elif adj2[g] == 2:\n            opp_t += rsize[g]\n    lead = own_s + own_t + 2 * dead_e - opp_s - opp_t - 2 * dead_o\n    lead += 7 if color == 'W' else -7\n    return lead >= 4",
+      "delta": 0.028610000000000024
+    },
+    {
+      "id": "782ab1cfe39349e3",
+      "name": "netted stone imbalance",
+      "description": "A stone is netted when no ray from it reaches friendly reinforcements or an open lane of four empty points while at least three of its four rays quickly hit enemy stones, meaning it is trapped inside a loose enemy net even with nearby space, and the opponent having clearly more netted stones than the evaluated side signals successful encirclement.",
+      "source": "MOTIF_NAME = 'netted stone imbalance'\nMOTIF_DESCRIPTION = 'A stone is netted when no ray from it reaches friendly reinforcements or an open lane of four empty points while at least three of its four rays quickly hit enemy stones, meaning it is trapped inside a loose enemy net even with nearby space, and the opponent having clearly more netted stones than the evaluated side signals successful encirclement.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    dirs = ((-1, 0), (1, 0), (0, -1), (0, 1))\n    own = 0\n    foe = 0\n    for r in range(19):\n        row = br[r]\n        for c in range(19):\n            s = row[c]\n            if s == '.':\n                continue\n            e = 'W' if s == 'B' else 'B'\n            closed = 0\n            bad = False\n            for dr, dc in dirs:\n                run = 0\n                hit = '.'\n                rr = r + dr\n                cc = c + dc\n                while 0 <= rr < 19 and 0 <= cc < 19:\n                    t = br[rr][cc]\n                    if t == '.':\n                        run += 1\n                        if run >= 4:\n                            break\n                    else:\n                        hit = t\n                        break\n                    rr += dr\n                    cc += dc\n                if hit == s:\n                    bad = True\n                    break\n                if run >= 4:\n                    bad = True\n                    break\n                if hit == e:\n                    closed += 1\n            if not bad and closed >= 3:\n                if s == color:\n                    own += 1\n                else:\n                    foe += 1\n    return foe - own >= 2",
+      "delta": 0.028609999999999997
+    },
+    {
+      "id": "7e2f4ca0a1d9bee2",
+      "name": "ray enclosure territory",
+      "description": "Empty points whose nearest stones along the four orthogonal rays include at least two evaluated-side stones and no opponent stone count as enclosed territory, and the evaluated side leads in such points after komi.",
+      "source": "MOTIF_NAME = 'ray enclosure territory'\nMOTIF_DESCRIPTION = 'Empty points whose nearest stones along the four orthogonal rays include at least two evaluated-side stones and no opponent stone count as enclosed territory, and the evaluated side leads in such points after komi.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    own = 0\n    opp = 0\n    for r in range(19):\n        for c in range(19):\n            if br[r][c] != '.':\n                continue\n            no = 0\n            ne = 0\n            x = r - 1\n            while x >= 0:\n                s = br[x][c]\n                if s != '.':\n                    if s == color:\n                        no += 1\n                    else:\n                        ne += 1\n                    break\n                x -= 1\n            x = r + 1\n            while x < 19:\n                s = br[x][c]\n                if s != '.':\n                    if s == color:\n                        no += 1\n                    else:\n                        ne += 1\n                    break\n                x += 1\n            if no and ne:\n                continue\n            x = c - 1\n            while x >= 0:\n                s = br[r][x]\n                if s != '.':\n                    if s == color:\n                        no += 1\n                    else:\n                        ne += 1\n                    break\n                x -= 1\n            x = c + 1\n            while x < 19:\n                s = br[r][x]\n                if s != '.':\n                    if s == color:\n                        no += 1\n                    else:\n                        ne += 1\n                    break\n                x += 1\n            if ne == 0 and no >= 2:\n                own += 1\n            elif no == 0 and ne >= 2:\n                opp += 1\n    diff = own - opp + (6 if color == 'W' else 0)\n    return diff >= 6",
+      "delta": 0.027170000000000027
+    },
+    {
+      "id": "ccb163941d571289",
+      "name": "swarmed group imbalance",
+      "description": "The opponent has more stones in groups whose surrounding ring of stones is numerically dominated by the evaluated side than the evaluated side does in opponent-dominated rings.",
+      "source": "MOTIF_NAME = 'swarmed group imbalance'\nMOTIF_DESCRIPTION = 'The opponent has more stones in groups whose surrounding ring of stones is numerically dominated by the evaluated side than the evaluated side does in opponent-dominated rings.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    gid = [-1] * 361\n    gsize = []\n    gcol = []\n    gcells = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(gsize)\n            gid[i] = g\n            cl = []\n            st = [i]\n            while st:\n                x = st.pop()\n                cl.append(x)\n                rr = x // 19\n                cc = x - rr * 19\n                for k in (-19 if rr else 0, 19 if rr < 18 else 0, -1 if cc else 0, 1 if cc < 18 else 0):\n                    if k:\n                        y = x + k\n                        if br[y // 19][y % 19] == s and gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n            gsize.append(len(cl))\n            gcol.append(s)\n            gcells.append(cl)\n    own_sw = 0\n    opp_sw = 0\n    for g in range(len(gsize)):\n        s = gcol[g]\n        e = 'W' if s == 'B' else 'B'\n        fr = set()\n        fo = set()\n        for x in gcells[g]:\n            rr = x // 19\n            cc = x - rr * 19\n            r0 = rr - 1 if rr else 0\n            r1 = rr + 2 if rr < 18 else 19\n            c0 = cc - 1 if cc else 0\n            c1 = cc + 2 if cc < 18 else 19\n            for r2 in range(r0, r1):\n                row = br[r2]\n                for c2 in range(c0, c1):\n                    y = r2 * 19 + c2\n                    t = row[c2]\n                    if t == e:\n                        fo.add(y)\n                    elif t == s and gid[y] != g:\n                        fr.add(y)\n        if len(fo) >= 3 and len(fo) - len(fr) >= 2:\n            if s == color:\n                own_sw += gsize[g]\n            else:\n                opp_sw += gsize[g]\n    return opp_sw - own_sw >= 4",
+      "delta": 0.026780000000000026
+    },
+    {
+      "id": "0c1b449d801f65f1",
+      "name": "corner stronghold advantage",
+      "description": "Each 5x5 corner region where a side has at least two stones and at least two more than the opponent is a secured corner, and owning more corners than the opponent signals a winning territorial foundation.",
+      "source": "MOTIF_NAME = 'corner stronghold advantage'\nMOTIF_DESCRIPTION = 'Each 5x5 corner region where a side has at least two stones and at least two more than the opponent is a secured corner, and owning more corners than the opponent signals a winning territorial foundation.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    own = 0\n    foe = 0\n    for r0 in (0, 14):\n        for c0 in (0, 14):\n            o = 0\n            x = 0\n            for r in range(r0, r0 + 5):\n                row = br[r]\n                for c in range(c0, c0 + 5):\n                    s = row[c]\n                    if s == color:\n                        o += 1\n                    elif s == opp:\n                        x += 1\n            if o >= 2 and o >= x + 2:\n                own += 1\n            elif x >= 2 and x >= o + 2:\n                foe += 1\n    return own - foe >= 1",
+      "delta": 0.024949999999999972
+    },
+    {
+      "id": "82dd4222613f90c5",
+      "name": "enclosed swing area advantage",
+      "description": "Flood-filling all points not held by a side and keeping only the components sealed off from the board edge gives that side fully enclosed area where enemy stones inside count as captured swing, and the evaluated side is winning when its stone count plus twice its enclosed area clearly exceeds the opponent's.",
+      "source": "MOTIF_NAME = 'enclosed swing area advantage'\nMOTIF_DESCRIPTION = 'Flood-filling all points not held by a side and keeping only the components sealed off from the board edge gives that side fully enclosed area where enemy stones inside count as captured swing, and the evaluated side is winning when its stone count plus twice its enclosed area clearly exceeds the opponent\\'s.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    def enclosed(sd):\n        mark = [False] * 361\n        total = 0\n        for r in range(19):\n            for c in range(19):\n                i = r * 19 + c\n                if mark[i] or br[r][c] == sd:\n                    continue\n                mark[i] = True\n                stack = [i]\n                size = 0\n                open_ = False\n                while stack:\n                    x = stack.pop()\n                    size += 1\n                    rr = x // 19\n                    cc = x % 19\n                    if rr == 0 or rr == 18 or cc == 0 or cc == 18:\n                        open_ = True\n                    for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):\n                        yr = rr + dr\n                        yc = cc + dc\n                        if 0 <= yr < 19 and 0 <= yc < 19:\n                            y = yr * 19 + yc\n                            if not mark[y] and br[yr][yc] != sd:\n                                mark[y] = True\n                                stack.append(y)\n                if not open_:\n                    total += size\n        stones = 0\n        for row in br:\n            stones += row.count(sd)\n        return stones + 2 * total\n    foe = 'B' if color == 'W' else 'W'\n    return enclosed(color) - enclosed(foe) >= 8",
+      "delta": 0.022999999999999993
+    },
+    {
+      "id": "164dd72f26e5fea0",
+      "name": "poisoned entry points advantage",
+      "description": "An empty point is poisoned for a side when playing there would be suicide or immediate atari without capturing (eyes, tiger mouths, hopeless extensions), and the opponent faces clearly more such poisoned points than the evaluated side.",
+      "source": "MOTIF_NAME = 'poisoned entry points advantage'\nMOTIF_DESCRIPTION = 'An empty point is poisoned for a side when playing there would be suicide or immediate atari without capturing (eyes, tiger mouths, hopeless extensions), and the opponent faces clearly more such poisoned points than the evaluated side.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    gid = [-1] * 361\n    gcol = []\n    glib = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(gcol)\n            gid[i] = g\n            st = [i]\n            libs = set()\n            while st:\n                x = st.pop()\n                rr = x // 19\n                cc = x % 19\n                for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):\n                    yr = rr + dr\n                    yc = cc + dc\n                    if 0 <= yr < 19 and 0 <= yc < 19:\n                        y = yr * 19 + yc\n                        t = br[yr][yc]\n                        if t == '.':\n                            libs.add(y)\n                        elif t == s and gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n            gcol.append(s)\n            glib.append(libs)\n    own_d = 0\n    opp_d = 0\n    for p in range(361):\n        r = p // 19\n        c = p % 19\n        if br[r][c] != '.':\n            continue\n        adjB = set()\n        adjW = set()\n        em = []\n        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):\n            yr = r + dr\n            yc = c + dc\n            if 0 <= yr < 19 and 0 <= yc < 19:\n                t = br[yr][yc]\n                if t == '.':\n                    em.append(yr * 19 + yc)\n                elif t == 'B':\n                    adjB.add(gid[yr * 19 + yc])\n                else:\n                    adjW.add(gid[yr * 19 + yc])\n        for X, adj, eadj in ((color, adjB if color == 'B' else adjW, adjW if color == 'B' else adjB),\n                             (('W' if color == 'B' else 'B'), adjW if color == 'B' else adjB, adjB if color == 'B' else adjW)):\n            libs = set(em)\n            for g in adj:\n                libs |= glib[g]\n            libs.discard(p)\n            capt = False\n            for g in eadj:\n                if len(glib[g]) == 1 and p in glib[g]:\n                    capt = True\n                    break\n            if not capt and len(libs) <= 1:\n                if X == color:\n                    own_d += 1\n                else:\n                    opp_d += 1\n    return opp_d - own_d >= 4",
+      "delta": 0.02124999999999999
+    },
+    {
+      "id": "1871b2404ec56d74",
+      "name": "miai connected stones advantage",
+      "description": "Two same-color groups sharing at least two different liberties cannot be cut apart (miai connection), and the evaluated side has clearly more stones in such securely linked groups than the opponent.",
+      "source": "MOTIF_NAME = 'miai connected stones advantage'\nMOTIF_DESCRIPTION = 'Two same-color groups sharing at least two different liberties cannot be cut apart (miai connection), and the evaluated side has clearly more stones in such securely linked groups than the opponent.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    gid = [-1] * 361\n    gcol = []\n    gsz = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(gcol)\n            gid[i] = g\n            st = [i]\n            n = 0\n            while st:\n                x = st.pop()\n                n += 1\n                rr = x // 19\n                cc = x - rr * 19\n                if rr and gid[x - 19] < 0 and br[rr - 1][cc] == s:\n                    gid[x - 19] = g\n                    st.append(x - 19)\n                if rr < 18 and gid[x + 19] < 0 and br[rr + 1][cc] == s:\n                    gid[x + 19] = g\n                    st.append(x + 19)\n                if cc and gid[x - 1] < 0 and br[rr][cc - 1] == s:\n                    gid[x - 1] = g\n                    st.append(x - 1)\n                if cc < 18 and gid[x + 1] < 0 and br[rr][cc + 1] == s:\n                    gid[x + 1] = g\n                    st.append(x + 1)\n            gcol.append(s)\n            gsz.append(n)\n    linkcnt = {}\n    for r in range(19):\n        for c in range(19):\n            if br[r][c] != '.':\n                continue\n            ids = set()\n            if r and gid[(r - 1) * 19 + c] >= 0:\n                ids.add(gid[(r - 1) * 19 + c])\n            if r < 18 and gid[(r + 1) * 19 + c] >= 0:\n                ids.add(gid[(r + 1) * 19 + c])\n            if c and gid[r * 19 + c - 1] >= 0:\n                ids.add(gid[r * 19 + c - 1])\n            if c < 18 and gid[r * 19 + c + 1] >= 0:\n                ids.add(gid[r * 19 + c + 1])\n            ids = sorted(ids)\n            for a in range(len(ids)):\n                ga = ids[a]\n                for b in range(a + 1, len(ids)):\n                    gb = ids[b]\n                    if gcol[ga] == gcol[gb]:\n                        k = ga * 400 + gb\n                        linkcnt[k] = linkcnt.get(k, 0) + 1\n    linked = [False] * len(gcol)\n    for k, v in linkcnt.items():\n        if v >= 2:\n            linked[k // 400] = True\n            linked[k % 400] = True\n    own = 0\n    opp = 0\n    for g in range(len(gcol)):\n        if linked[g]:\n            if gcol[g] == color:\n                own += gsz[g]\n            else:\n                opp += gsz[g]\n    return own - opp >= 4",
+      "delta": 0.021230000000000027
+    },
+    {
+      "id": "d8272abfb965341b",
+      "name": "spread fighting groups advantage",
+      "description": "Counting connected groups of two or more stones for each side, the evaluated side fields at least three more such groups than the opponent, indicating broadly spread living forces rather than a few clumped lumps.",
+      "source": "MOTIF_NAME = 'spread fighting groups advantage'\nMOTIF_DESCRIPTION = 'Counting connected groups of two or more stones for each side, the evaluated side fields at least three more such groups than the opponent, indicating broadly spread living forces rather than a few clumped lumps.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    gid = [-1] * 361\n    gsize = []\n    gcol = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(gsize)\n            gid[i] = g\n            st = [i]\n            n = 0\n            while st:\n                x = st.pop()\n                n += 1\n                rr = x // 19\n                cc = x - rr * 19\n                if rr and gid[x - 19] < 0 and br[rr - 1][cc] == s:\n                    gid[x - 19] = g\n                    st.append(x - 19)\n                if rr < 18 and gid[x + 19] < 0 and br[rr + 1][cc] == s:\n                    gid[x + 19] = g\n                    st.append(x + 19)\n                if cc and gid[x - 1] < 0 and br[rr][cc - 1] == s:\n                    gid[x - 1] = g\n                    st.append(x - 1)\n                if cc < 18 and gid[x + 1] < 0 and br[rr][cc + 1] == s:\n                    gid[x + 1] = g\n                    st.append(x + 1)\n            gsize.append(n)\n            gcol.append(s)\n    own_g = 0\n    opp_g = 0\n    for g in range(len(gsize)):\n        if gsize[g] >= 2:\n            if gcol[g] == color:\n                own_g += 1\n            else:\n                opp_g += 1\n    return own_g - opp_g >= 3",
+      "delta": 0.020490000000000008
+    },
+    {
+      "id": "9f088d0b81849228",
+      "name": "large endangered group imbalance",
+      "description": "Stones in groups of four or more with at most three liberties are in danger of being captured, and the opponent has clearly more such endangered stones than the evaluated side.",
+      "source": "MOTIF_NAME = 'large endangered group imbalance'\nMOTIF_DESCRIPTION = 'Stones in groups of four or more with at most three liberties are in danger of being captured, and the opponent has clearly more such endangered stones than the evaluated side.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    gid = [-1] * 361\n    gsize = []\n    glib = []\n    gcol = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(gsize)\n            gid[i] = g\n            st = [i]\n            n = 0\n            libs = set()\n            while st:\n                x = st.pop()\n                n += 1\n                rr = x // 19\n                cc = x - rr * 19\n                if rr:\n                    y = x - 19\n                    t = br[rr - 1][cc]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        libs.add(y)\n                if rr < 18:\n                    y = x + 19\n                    t = br[rr + 1][cc]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        libs.add(y)\n                if cc:\n                    y = x - 1\n                    t = br[rr][cc - 1]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        libs.add(y)\n                if cc < 18:\n                    y = x + 1\n                    t = br[rr][cc + 1]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        libs.add(y)\n            gsize.append(n)\n            glib.append(len(libs))\n            gcol.append(s)\n    own_bad = 0\n    opp_bad = 0\n    for g in range(len(gsize)):\n        if gsize[g] >= 4 and glib[g] <= 3:\n            if gcol[g] == color:\n                own_bad += gsize[g]\n            else:\n                opp_bad += gsize[g]\n    return opp_bad - own_bad >= 5",
+      "delta": 0.01902999999999999
+    },
+    {
+      "id": "136fc8d366ae3348",
+      "name": "double strike tactical points",
+      "description": "An empty point is a double strike for a side when playing there would be legal and would capture or put in atari two or more different enemy groups, and the evaluated side holds clearly more such double-strike points than the opponent.",
+      "source": "MOTIF_NAME = 'double strike tactical points'\nMOTIF_DESCRIPTION = 'An empty point is a double strike for a side when playing there would be legal and would capture or put in atari two or more different enemy groups, and the evaluated side holds clearly more such double-strike points than the opponent.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    gid = [-1] * 361\n    glib = []\n    gcol = []\n    for r in range(19):\n        for c in range(19):\n            i = r * 19 + c\n            s = br[r][c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            g = len(glib)\n            gid[i] = g\n            st = [i]\n            libs = set()\n            while st:\n                x = st.pop()\n                rr = x // 19\n                cc = x - rr * 19\n                for d in (-19, 19, -1, 1):\n                    if (d == -19 and rr == 0) or (d == 19 and rr == 18) or (d == -1 and cc == 0) or (d == 1 and cc == 18):\n                        continue\n                    y = x + d\n                    t = br[y // 19][y % 19]\n                    if t == s:\n                        if gid[y] < 0:\n                            gid[y] = g\n                            st.append(y)\n                    elif t == '.':\n                        libs.add(y)\n            glib.append(len(libs))\n            gcol.append(s)\n    own_hit = 0\n    opp_hit = 0\n    for r in range(19):\n        for c in range(19):\n            if br[r][c] != '.':\n                continue\n            adj = set()\n            has_empty = False\n            for rr, cc in ((r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)):\n                if 0 <= rr < 19 and 0 <= cc < 19:\n                    t = br[rr][cc]\n                    if t == '.':\n                        has_empty = True\n                    else:\n                        adj.add(gid[rr * 19 + cc])\n            if not adj:\n                continue\n            tgt_own = 0\n            tgt_opp = 0\n            strong_own = False\n            strong_opp = False\n            cap_own = False\n            cap_opp = False\n            for g in adj:\n                if gcol[g] == color:\n                    L = glib[g]\n                    if L <= 2:\n                        tgt_opp += 1\n                        if L == 1:\n                            cap_opp = True\n                    else:\n                        strong_own = True\n                else:\n                    L = glib[g]\n                    if L <= 2:\n                        tgt_own += 1\n                        if L == 1:\n                            cap_own = True\n                    else:\n                        strong_opp = True\n            if tgt_own >= 2 and (has_empty or strong_own or cap_own):\n                own_hit += 1\n            if tgt_opp >= 2 and (has_empty or strong_opp or cap_opp):\n                opp_hit += 1\n    return own_hit >= 2 and own_hit > opp_hit",
+      "delta": 0.016829999999999998
+    },
+    {
+      "id": "80fd172714d2a687",
+      "name": "clean pocket territory",
+      "description": "Empty points whose 3x3 neighborhood holds at least two evaluated-side stones and no opponent stone mark uncontested space, and the evaluated side leads in such points after komi.",
+      "source": "MOTIF_NAME = 'clean pocket territory'\nMOTIF_DESCRIPTION = 'Empty points whose 3x3 neighborhood holds at least two evaluated-side stones and no opponent stone mark uncontested space, and the evaluated side leads in such points after komi.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    own = 0\n    enemy = 0\n    for r in range(19):\n        r0 = r - 1 if r else 0\n        r1 = r + 2 if r < 18 else 19\n        for c in range(19):\n            if br[r][c] != '.':\n                continue\n            c0 = c - 1 if c else 0\n            c1 = c + 2 if c < 18 else 19\n            no = 0\n            ne = 0\n            for rr in range(r0, r1):\n                row = br[rr]\n                for cc in range(c0, c1):\n                    s = row[cc]\n                    if s == color:\n                        no += 1\n                    elif s == opp:\n                        ne += 1\n            if ne == 0 and no >= 2:\n                own += 1\n            elif no == 0 and ne >= 2:\n                enemy += 1\n    diff = own - enemy + (6 if color == 'W' else 0)\n    return diff >= 6",
+      "delta": 0.015690000000000037
+    },
+    {
+      "id": "d3ef4b8b0b5f3b42",
+      "name": "confined group imbalance",
+      "description": "The opponent has more stones in groups that touch no empty region larger than three points and thus lack room for eyes or escape.",
+      "source": "MOTIF_NAME = 'confined group imbalance'\nMOTIF_DESCRIPTION = 'The opponent has more stones in groups that touch no empty region larger than three points and thus lack room for eyes or escape.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    rid = [-1] * 361\n    rsize = []\n    for r in range(19):\n        row = br[r]\n        for c in range(19):\n            i = r * 19 + c\n            if row[c] != '.' or rid[i] >= 0:\n                continue\n            g = len(rsize)\n            rid[i] = g\n            st = [i]\n            n = 0\n            while st:\n                x = st.pop()\n                n += 1\n                rr = x // 19\n                cc = x - rr * 19\n                for k in (-19 if rr else 0, 19 if rr < 18 else 0, -1 if cc else 0, 1 if cc < 18 else 0):\n                    if k:\n                        y = x + k\n                        if br[y // 19][y % 19] == '.' and rid[y] < 0:\n                            rid[y] = g\n                            st.append(y)\n            rsize.append(n)\n    gid = [-1] * 361\n    own_bad = 0\n    opp_bad = 0\n    for r in range(19):\n        row = br[r]\n        for c in range(19):\n            i = r * 19 + c\n            s = row[c]\n            if s == '.' or gid[i] >= 0:\n                continue\n            gid[i] = i\n            st = [i]\n            n = 0\n            mx = 0\n            while st:\n                x = st.pop()\n                n += 1\n                rr = x // 19\n                cc = x - rr * 19\n                for k in (-19 if rr else 0, 19 if rr < 18 else 0, -1 if cc else 0, 1 if cc < 18 else 0):\n                    if k:\n                        y = x + k\n                        t = br[y // 19][y % 19]\n                        if t == s:\n                            if gid[y] < 0:\n                                gid[y] = i\n                                st.append(y)\n                        elif t == '.':\n                            sz = rsize[rid[y]]\n                            if sz > mx:\n                                mx = sz\n            if mx <= 3:\n                if s == color:\n                    own_bad += n\n                else:\n                    opp_bad += n\n    return opp_bad - own_bad >= 4",
+      "delta": 0.014530000000000015
+    },
+    {
+      "id": "16355288b19594fe",
+      "name": "sector stone dominance",
+      "description": "The board is split into nine sectors by thirds along each axis; a side owns a sector when it has at least three stones there and at least two more than the opponent, and controlling at least two more sectors than the opponent signals overall board dominance.",
+      "source": "MOTIF_NAME = 'sector stone dominance'\nMOTIF_DESCRIPTION = 'The board is split into nine sectors by thirds along each axis; a side owns a sector when it has at least three stones there and at least two more than the opponent, and controlling at least two more sectors than the opponent signals overall board dominance.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    opp = 'W' if color == 'B' else 'B'\n    own = 0\n    foe = 0\n    for r0, r1 in ((0, 6), (6, 13), (13, 19)):\n        for c0, c1 in ((0, 6), (6, 13), (13, 19)):\n            o = 0\n            x = 0\n            for r in range(r0, r1):\n                row = board_rows[r]\n                for c in range(c0, c1):\n                    s = row[c]\n                    if s == color:\n                        o += 1\n                    elif s == opp:\n                        x += 1\n            if o >= 3 and o >= x + 2:\n                own += 1\n            elif x >= 3 and x >= o + 2:\n                foe += 1\n    return own - foe >= 2",
+      "delta": 0.013129999999999996
+    },
+    {
+      "id": "ce69ce99083fc05b",
+      "name": "eye point imbalance",
+      "description": "Empty points whose in-board orthogonal neighbors are all stones of one side are eye points, and the evaluated side has at least two more such eye points than the opponent.",
+      "source": "MOTIF_NAME = 'eye point imbalance'\nMOTIF_DESCRIPTION = 'Empty points whose in-board orthogonal neighbors are all stones of one side are eye points, and the evaluated side has at least two more such eye points than the opponent.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    own = 0\n    foe = 0\n    for r in range(19):\n        for c in range(19):\n            if br[r][c] != '.':\n                continue\n            m = 0\n            if r:\n                s = br[r - 1][c]\n                if s == '.':\n                    continue\n                m |= 1 if s == color else 2\n            if r < 18:\n                s = br[r + 1][c]\n                if s == '.':\n                    continue\n                m |= 1 if s == color else 2\n            if c:\n                s = br[r][c - 1]\n                if s == '.':\n                    continue\n                m |= 1 if s == color else 2\n            if c < 18:\n                s = br[r][c + 1]\n                if s == '.':\n                    continue\n                m |= 1 if s == color else 2\n            if m == 1:\n                own += 1\n            elif m == 2:\n                foe += 1\n    return own - foe >= 2",
+      "delta": 0.011369999999999991
+    },
+    {
+      "id": "96c6a01a0a7d817d",
+      "name": "tiger mouth shape advantage",
+      "description": "An empty interior point with exactly three orthogonal neighbors of one color and the fourth orthogonal neighbor empty is a tiger mouth, a strong flexible shape for both attack and defense, and the evaluated side forms clearly more tiger mouths than the opponent.",
+      "source": "MOTIF_NAME = 'tiger mouth shape advantage'\nMOTIF_DESCRIPTION = 'An empty interior point with exactly three orthogonal neighbors of one color and the fourth orthogonal neighbor empty is a tiger mouth, a strong flexible shape for both attack and defense, and the evaluated side forms clearly more tiger mouths than the opponent.'\n\ndef motif(board_rows: list[str], color: str) -> bool:\n    br = board_rows\n    opp = 'W' if color == 'B' else 'B'\n    own = 0\n    foe = 0\n    for r in range(1, 18):\n        up = br[r - 1]\n        mid = br[r]\n        dn = br[r + 1]\n        for c in range(1, 18):\n            if mid[c] != '.':\n                continue\n            oc = 0\n            xc = 0\n            em = 0\n            for s in (up[c], dn[c], mid[c - 1], mid[c + 1]):\n                if s == color:\n                    oc += 1\n                elif s == opp:\n                    xc += 1\n                elif s == '.':\n                    em += 1\n            if em == 1:\n                if oc == 3:\n                    own += 1\n                elif xc == 3:\n                    foe += 1\n    return own - foe >= 3",
+      "delta": 0.010110000000000008
+    }
+  ],
+  "metadata": {
+    "library_id": "go/kimi-k3",
+    "model": "Kimi-K3",
+    "score_definition": "P(motif=True | winning) - P(motif=True | losing), preserved from the canonical discovery ranking.",
+    "motif_provenance": {
+      "4fdbea77f2d85931": {
+        "source_sha256": "4fdbea77f2d85931d34f31be0248a66d2d930991c8d94f2c6a51a70e899d6a59",
+        "source_file": "local_stone_density_territory.py",
+        "rank": 1,
+        "discovery_index": 14,
+        "p_true_winning": 0.45281,
+        "p_true_losing": 0.36138
+      },
+      "d11b9e0feb4b48c0": {
+        "source_sha256": "d11b9e0feb4b48c030c9d8157ef30b404d4beca9cac989e12d78d8759debbf77",
+        "source_file": "decay_influence_territory.py",
+        "rank": 2,
+        "discovery_index": 6,
+        "p_true_winning": 0.38484,
+        "p_true_losing": 0.30911
+      },
+      "d6de0895d4b0de06": {
+        "source_sha256": "d6de0895d4b0de06aae95b8b560470a47a40004c937b410a1cbed6196d4ebd70",
+        "source_file": "power_border_territory.py",
+        "rank": 3,
+        "discovery_index": 19,
+        "p_true_winning": 0.43547,
+        "p_true_losing": 0.36461
+      },
+      "6161ef793640979e": {
+        "source_sha256": "6161ef793640979eee821956f11b61a4b76831d3bc228f76f34302933302f3b0",
+        "source_file": "besieged_group_imbalance.py",
+        "rank": 4,
+        "discovery_index": 0,
+        "p_true_winning": 0.37854,
+        "p_true_losing": 0.31129
+      },
+      "621fdb83357073b0": {
+        "source_sha256": "621fdb83357073b0e76e822b582ae51cad5aaf1ce1a40c90c9f9394fa5a27e2d",
+        "source_file": "favorable_contact_fights.py",
+        "rank": 5,
+        "discovery_index": 10,
+        "p_true_winning": 0.3311,
+        "p_true_losing": 0.27186
+      },
+      "9d9a6dafcd3a9952": {
+        "source_sha256": "9d9a6dafcd3a99525b6ca14d56bc0544608e888696555bdd138479a3ba5080f3",
+        "source_file": "locally_outnumbered_stone_imbalance.py",
+        "rank": 6,
+        "discovery_index": 15,
+        "p_true_winning": 0.23261,
+        "p_true_losing": 0.17507
+      },
+      "e4de55622154b577": {
+        "source_sha256": "e4de55622154b577373b31a1f456db4a825ee84e3edf0b439a6dbc600b5310ba",
+        "source_file": "capture_ledger_advantage.py",
+        "rank": 7,
+        "discovery_index": 1,
+        "p_true_winning": 0.15509,
+        "p_true_losing": 0.11438
+      },
+      "0c7e0387e6ee842f": {
+        "source_sha256": "0c7e0387e6ee842fbb526e23859c4b9240b7504aa9598b327fae3c0b6b3d10e8",
+        "source_file": "strong_cutting_stones_advantage.py",
+        "rank": 8,
+        "discovery_index": 26,
+        "p_true_winning": 0.34426,
+        "p_true_losing": 0.30559
+      },
+      "a74d2d707059d5bf": {
+        "source_sha256": "a74d2d707059d5bfc897c829a9a1679647c786c399be6fa14f34b5a1b0f228d4",
+        "source_file": "isolated_fighting_stones_imbalance.py",
+        "rank": 9,
+        "discovery_index": 12,
+        "p_true_winning": 0.12745,
+        "p_true_losing": 0.0924
+      },
+      "27e8d4be56b2a2c8": {
+        "source_sha256": "27e8d4be56b2a2c8397df7a390eb6615e48591b44cf900412acec257b1b853e4",
+        "source_file": "head_hit_pressure_advantage.py",
+        "rank": 10,
+        "discovery_index": 11,
+        "p_true_winning": 0.36614,
+        "p_true_losing": 0.33188
+      },
+      "cb85ac07d02beb02": {
+        "source_sha256": "cb85ac07d02beb028b35fa60cf9f5ddf9473158ccef31928cfc492b43555cfdb",
+        "source_file": "strength_mismatch_pressure.py",
+        "rank": 11,
+        "discovery_index": 25,
+        "p_true_winning": 0.32218,
+        "p_true_losing": 0.28821
+      },
+      "37ae2aedf6e42b82": {
+        "source_sha256": "37ae2aedf6e42b82f3084130056ecdad87866701ddf47ee5bdf2975da9bbc3db",
+        "source_file": "pressed_low_line_stones_imbalance.py",
+        "rank": 12,
+        "discovery_index": 20,
+        "p_true_winning": 0.31692,
+        "p_true_losing": 0.28461
+      },
+      "eff396bd05ce5383": {
+        "source_sha256": "eff396bd05ce5383df85876a983507e97bbd3366c1ce677067193a36a8410664",
+        "source_file": "secure_center_weight_advantage.py",
+        "rank": 13,
+        "discovery_index": 23,
+        "p_true_winning": 0.19149,
+        "p_true_losing": 0.16151
+      },
+      "f2ca8e1ce7336a84": {
+        "source_sha256": "f2ca8e1ce7336a8483d2c64af010066a6be00ab6e0395a4fe15b9b6210d4f439",
+        "source_file": "empty_triangle_inefficiency_imbalance.py",
+        "rank": 14,
+        "discovery_index": 8,
+        "p_true_winning": 0.19244,
+        "p_true_losing": 0.16379
+      },
+      "bf448ece79a454bd": {
+        "source_sha256": "bf448ece79a454bd87d012dadbf1aa71510d18fdb70e1bb681b53917ea8f78c7",
+        "source_file": "capture_weighted_area.py",
+        "rank": 15,
+        "discovery_index": 2,
+        "p_true_winning": 0.38056,
+        "p_true_losing": 0.35195
+      },
+      "782ab1cfe39349e3": {
+        "source_sha256": "782ab1cfe39349e38f181c5cf1300f057a238cafe9a4e025023ab4fff73e2304",
+        "source_file": "netted_stone_imbalance.py",
+        "rank": 16,
+        "discovery_index": 17,
+        "p_true_winning": 0.12974,
+        "p_true_losing": 0.10113
+      },
+      "7e2f4ca0a1d9bee2": {
+        "source_sha256": "7e2f4ca0a1d9bee2c01587f6af1437eff4df7d0aa86e58d41768bbaee8aafbfb",
+        "source_file": "ray_enclosure_territory.py",
+        "rank": 17,
+        "discovery_index": 21,
+        "p_true_winning": 0.42346,
+        "p_true_losing": 0.39629
+      },
+      "ccb163941d571289": {
+        "source_sha256": "ccb163941d5712894dee2399d16e53f028f6e04bef2db6cc38b3a11e012c74de",
+        "source_file": "swarmed_group_imbalance.py",
+        "rank": 18,
+        "discovery_index": 27,
+        "p_true_winning": 0.2943,
+        "p_true_losing": 0.26752
+      },
+      "0c1b449d801f65f1": {
+        "source_sha256": "0c1b449d801f65f192d86052167908b11ff931fa5764d234ff7fc49fe75fe604",
+        "source_file": "corner_stronghold_advantage.py",
+        "rank": 19,
+        "discovery_index": 5,
+        "p_true_winning": 0.35157,
+        "p_true_losing": 0.32662
+      },
+      "82dd4222613f90c5": {
+        "source_sha256": "82dd4222613f90c52b99a349606aaef2aaca087227a38c072ad3647728f55b8a",
+        "source_file": "enclosed_swing_area_advantage.py",
+        "rank": 20,
+        "discovery_index": 29,
+        "p_true_winning": 0.11369,
+        "p_true_losing": 0.09069
+      },
+      "164dd72f26e5fea0": {
+        "source_sha256": "164dd72f26e5fea0754f9070f2052f38cabe829eb8b4d88040af7dc802d4104d",
+        "source_file": "poisoned_entry_points_advantage.py",
+        "rank": 21,
+        "discovery_index": 18,
+        "p_true_winning": 0.15919,
+        "p_true_losing": 0.13794
+      },
+      "1871b2404ec56d74": {
+        "source_sha256": "1871b2404ec56d7459db02a799936ad37f78a3ec7178d112431004ec14cbc038",
+        "source_file": "miai_connected_stones_advantage.py",
+        "rank": 22,
+        "discovery_index": 16,
+        "p_true_winning": 0.37772,
+        "p_true_losing": 0.35649
+      },
+      "d8272abfb965341b": {
+        "source_sha256": "d8272abfb965341bf04bfcbe203c2141d9df788c4d2e28a4521fc6a8a86cc586",
+        "source_file": "spread_fighting_groups_advantage.py",
+        "rank": 23,
+        "discovery_index": 24,
+        "p_true_winning": 0.16414,
+        "p_true_losing": 0.14365
+      },
+      "9f088d0b81849228": {
+        "source_sha256": "9f088d0b81849228b27e3e07d295493e5bb7fb1555bf4098ea725f065401d149",
+        "source_file": "large_endangered_group_imbalance.py",
+        "rank": 24,
+        "discovery_index": 13,
+        "p_true_winning": 0.19982,
+        "p_true_losing": 0.18079
+      },
+      "136fc8d366ae3348": {
+        "source_sha256": "136fc8d366ae3348f75e197815607ba9b44a472b5323a2b664461f1a1cfe3501",
+        "source_file": "double_strike_tactical_points.py",
+        "rank": 25,
+        "discovery_index": 7,
+        "p_true_winning": 0.10915,
+        "p_true_losing": 0.09232
+      },
+      "80fd172714d2a687": {
+        "source_sha256": "80fd172714d2a68746d5236caf3f9275e490d2c90b4888ca885886b8694a4ac0",
+        "source_file": "clean_pocket_territory.py",
+        "rank": 26,
+        "discovery_index": 3,
+        "p_true_winning": 0.32268,
+        "p_true_losing": 0.30699
+      },
+      "d3ef4b8b0b5f3b42": {
+        "source_sha256": "d3ef4b8b0b5f3b42ea549af4cbef07bd963ef84a0003b88e9064be324d7e5056",
+        "source_file": "confined_group_imbalance.py",
+        "rank": 27,
+        "discovery_index": 4,
+        "p_true_winning": 0.15279,
+        "p_true_losing": 0.13826
+      },
+      "16355288b19594fe": {
+        "source_sha256": "16355288b19594fe753f15c6cb06722f6afb195a9add0e00b95b53d0093d715a",
+        "source_file": "sector_stone_dominance.py",
+        "rank": 28,
+        "discovery_index": 22,
+        "p_true_winning": 0.05676,
+        "p_true_losing": 0.04363
+      },
+      "ce69ce99083fc05b": {
+        "source_sha256": "ce69ce99083fc05b8bafff46e5ac9b788dea9490259d2ac9e1a00574941e3eef",
+        "source_file": "eye_point_imbalance.py",
+        "rank": 29,
+        "discovery_index": 9,
+        "p_true_winning": 0.15638,
+        "p_true_losing": 0.14501
+      },
+      "96c6a01a0a7d817d": {
+        "source_sha256": "96c6a01a0a7d817dbbabbbe751076e321cf72e13d7f8c24704228e2ec6aa7241",
+        "source_file": "tiger_mouth_shape_advantage.py",
+        "rank": 30,
+        "discovery_index": 28,
+        "p_true_winning": 0.12987,
+        "p_true_losing": 0.11976
+      }
+    },
+    "run_id": "go-bp-completion-20260924/completed/runs/kimi3",
+    "motif_count": 30,
+    "completion_status": "complete",
+    "successful_iterations": 100,
+    "additional_iterations": 4,
+    "completion_summary_sha256": "58dfd0e2feec1cc9000672b44d155b936f094fb454871033d0a45bb6f6accd90",
+    "ranking_sha256": "3727db3e4eb299bfafa900944d6d797b93ebfb0d87aa357723fb6033f42fedfe",
+    "retry_policy": "Retry provider errors/empty visible answers without consuming a discovery step; invalid delivered code consumes a step, preserving the original format-repair procedure.",
+    "parent_library": {
+      "run_id": "basis_api_runs/kimi3_chess_go_true_max64k_100it_c070_0b98b6a_20260730_084435/go_kimi3_tokenfactory_max_clean_100it_c070",
+      "motif_count": 29,
+      "archive": "reports/go/appendix_examples/provenance/basis_sources.jsonl.gz",
+      "archive_sha256": "3578cc235b87ca4b08479b4ec87d3b6fae847e1bbdb3b1d8c7acb3c6c870342b",
+      "ranking_sha256": "e676b4c4d4a48e214f702de23c040e144f9955559204571c428a51108b61646c",
+      "source_commit": "bad3bd15b867f8c12517d087132fb8187d7e5c08",
+      "library_sha256": "e527cf3bd9d0ae5049a6963be530ac6b35b145fb729bef7553de75ca9517b385"
+    }
+  }
+}

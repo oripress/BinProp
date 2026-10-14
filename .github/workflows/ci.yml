@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install development tools
+        run: python -m pip install -e . build ruff==0.11.13
+      - name: Lint
+        run: ruff check src tests examples experiments
+      - name: Check formatting
+        run: ruff format --check src tests examples experiments
+      - name: Test
+        run: python -m unittest discover -s tests -v
+      - name: Build distributions
+        run: python -m build
+      - name: Test installed wheel and offline example
+        shell: bash
+        run: |
+          smoke_dir="$(mktemp -d)"
+          python -m venv "$smoke_dir/venv"
+          "$smoke_dir/venv/bin/python" -m pip install dist/*.whl
+          cp examples/explain_chess.py examples/explain_go.py "$smoke_dir/"
+          cd "$smoke_dir"
+          "$smoke_dir/venv/bin/binary-properties" libraries
+          "$smoke_dir/venv/bin/python" explain_chess.py --write-comparison comparison.json
+          "$smoke_dir/venv/bin/binary-properties" infer --library chess/claude-opus-5 --positions comparison.json --output explanation.json
+          "$smoke_dir/venv/bin/python" -c 'import json; r = json.load(open("explanation.json")); assert r["selected"] and not r["errors"] and not r["used_fallback"]'
+          "$smoke_dir/venv/bin/python" explain_go.py --write-comparison go-comparison.json
+          "$smoke_dir/venv/bin/binary-properties" infer --library go/claude-opus-5 --positions go-comparison.json --output go-explanation.json
+          "$smoke_dir/venv/bin/python" -c 'import json; r = json.load(open("go-explanation.json")); assert r["selected"] and not r["errors"] and not r["used_fallback"]'

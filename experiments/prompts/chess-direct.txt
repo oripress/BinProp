@@ -1,0 +1,33 @@
+You are given 4 positive chess FENs and 4 negative chess FENs.
+Positive FENs should make explain(fen) return True.
+Negative FENs should make explain(fen) return False.
+Infer one or more chess motifs, structural principles, or concrete board features that together separate the positive family from the negative family.
+Prefer robust chess properties that could still work on related continuation positions, rather than brittle rules tied to an exact board.
+Do not solve by checking one exact square or a hand-picked list of a few exact squares.
+When a concrete square or piece feature is useful, connect it to a broader chess idea such as material, king safety, pawn structure, piece activity, open files or diagonals, coordination, space, or threats.
+A useful answer may combine several simple features when no single motif is enough.
+Return exactly one Python code block defining exactly three distinct motif helpers named explain_1, explain_2, and explain_3, plus def explain(fen: str) -> bool that combines them.
+Each helper should test a different chess idea; explain may combine the helpers with AND, OR, majority vote, or another simple rule you judge appropriate.
+The hidden test will call the final explain(fen) on related continuation FENs not listed below. It should return True for the positive family and False for the negative family.
+The function may import and use python-chess; helper functions are allowed, but the final explain must return a bool.
+Use simple Python only: no try/except, lambda, while loops, eval, exec, file/network access, or dynamic imports.
+
+Positive support FENs:
+{{positive_support}}
+
+Negative support FENs:
+{{negative_support}}
+
+Return format:
+```python
+import chess
+def explain_1(fen: str) -> bool:
+    ...
+def explain_2(fen: str) -> bool:
+    ...
+def explain_3(fen: str) -> bool:
+    ...
+def explain(fen: str) -> bool:
+    return ...
+```
+Brief explanation, at most three short sentences.

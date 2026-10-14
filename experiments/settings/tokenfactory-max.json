@@ -1,0 +1,7 @@
+{
+  "chat_template_kwargs": {
+    "enable_thinking": true,
+    "thinking_budget_tokens": 61440,
+    "thinking_budget": 61440
+  }
+}

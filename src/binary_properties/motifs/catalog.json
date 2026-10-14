@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "libraries": [
+    {
+      "id": "chess/claude-opus-5",
+      "model": "Claude Opus 5",
+      "game": "chess",
+      "motif_count": 30,
+      "run_id": "chess_max_reasoning_suite/kimi27_gpt55_opus5_20260725_131108/basis/opus5",
+      "sha256": "d46251b2a1900c70e3339d4a0221798d5fe52133e3710b1b4552ab99a9e91b33"
+    },
+    {
+      "id": "chess/deepseek-v4-pro",
+      "model": "DeepSeek-V4-Pro",
+      "game": "chess",
+      "motif_count": 28,
+      "run_id": "basis_api_runs/tokenfactory_chess_bp_direct_max64k_100it_c070_20260719_101413/chess_deepseekv4",
+      "sha256": "4ce9f014e96551ed7654c80a2a9361b04ef98450826ad243283094f5dafdf5d1"
+    },
+    {
+      "id": "chess/fable-5",
+      "model": "Fable 5",
+      "game": "chess",
+      "motif_count": 20,
+      "run_id": "basis_api_runs/smoke_fable5_max_5it_cost_20260719_082434",
+      "sha256": "bf7136271789a335d1fd4b0cd3869446faf53885d1e6cb874ba7c86448f3f0f9"
+    },
+    {
+      "id": "chess/glm-5.2",
+      "model": "GLM-5.2",
+      "game": "chess",
+      "motif_count": 21,
+      "run_id": "basis_api_runs/tokenfactory_chess_bp_direct_max64k_100it_c070_20260719_101413/chess_glm52",
+      "sha256": "ca9854a52b88df75d6157047f99f6658ca4402d3b88825ce7b096f9b43a64ecd"
+    },
+    {
+      "id": "chess/gpt-5.5",
+      "model": "GPT-5.5",
+      "game": "chess",
+      "motif_count": 44,
+      "run_id": "chess_max_reasoning_suite/kimi27_gpt55_opus5_20260725_131108/basis/gpt55",
+      "sha256": "3a4e7cadb0e2f03f1ce05e8825d7c8d4deeb763746fda64356659679cde65166"
+    },
+    {
+      "id": "chess/gpt-5.6-sol",
+      "model": "GPT-5.6 Sol",
+      "game": "chess",
+      "motif_count": 21,
+      "run_id": "basis_api_runs/queued_gpt56sol_max64k_100it_c070_20260719_101413",
+      "sha256": "da4459971edfe60fab9d3d92bc43da8744ad2a5ccbb998631acdb3e2fd58d7a1"
+    },
+    {
+      "id": "chess/kimi-k3",
+      "model": "Kimi K3",
+      "game": "chess",
+      "motif_count": 11,
+      "run_id": "kimi3-chess-bp-fresh-20260921",
+      "sha256": "386d21a525fdd29a03d314419581cb6a4f1f8a484cc2f2a7e3eb7a6dad8178e4"
+    },
+    {
+      "id": "chess/qwen3.5-397b-a17b",
+      "model": "Qwen3.5-397B-A17B",
+      "game": "chess",
+      "motif_count": 17,
+      "run_id": "basis_api_runs/tokenfactory_chess_bp_direct_max64k_100it_c070_20260719_101413/chess_qwen35",
+      "sha256": "70832e2b7d0157df6c1d8ebd4f3c3a926190b8ab850ea3f00309a65e552e0128"
+    },
+    {
+      "id": "go/claude-opus-5",
+      "model": "Opus 5",
+      "game": "go",
+      "motif_count": 35,
+      "run_id": "go-bp-completion-20260924/completed/runs/opus5",
+      "sha256": "858da2feeb28ac6609e9d9a9df5502b5b7e54b08b4b11f213db378b317cc4dc1"
+    },
+    {
+      "id": "go/deepseek-v4-pro",
+      "model": "DeepSeek-V4-Pro",
+      "game": "go",
+      "motif_count": 5,
+      "run_id": "basis_api_runs/tokenfactory_go_bp_max64k_100it_c070_20260721_102438/go/deepseekv4/run",
+      "sha256": "638250ccea1f42cbc413ffbf93a3e6ad473e8f98006455dfca89692ef6dd5bd6"
+    },
+    {
+      "id": "go/fable-5",
+      "model": "Fable 5",
+      "game": "go",
+      "motif_count": 45,
+      "run_id": "basis_api_runs/go_sol_fable_max64k_100it_c070_20260811_092729_7eef68f/basis/fable",
+      "sha256": "bb2aeaadf98a1531c12800dcf81fe77a40a9edd3c0e0c0e68ae3c9d3cee1b19b"
+    },
+    {
+      "id": "go/glm-5.2",
+      "model": "GLM-5.2",
+      "game": "go",
+      "motif_count": 34,
+      "run_id": "basis_api_runs/tokenfactory_go_bp_max64k_100it_c070_20260721_102438/go/glm52/run",
+      "sha256": "8cbfec5000bfa866049cdc18e8e58659db28ad5a94d0e62f74fcdb5a873ea655"
+    },
+    {
+      "id": "go/gpt-5.5",
+      "model": "GPT-5.5",
+      "game": "go",
+      "motif_count": 39,
+      "run_id": "basis_api_runs/go_gpt55_bp_max64k_100it_c070_20260722_092058/run",
+      "sha256": "8366cd7f30c88cc902afe161bc18ab3a7bdc6d48269a9ffab4cdcf3610149d7a"
+    },
+    {
+      "id": "go/gpt-5.6-sol",
+      "model": "GPT-5.6 Sol",
+      "game": "go",
+      "motif_count": 31,
+      "run_id": "basis_api_runs/go_sol_fable_max64k_100it_c070_20260811_092729_7eef68f/basis/sol",
+      "sha256": "118caf9e27c992ed92c29e38bd5ec0696088f5c2b1b7cd34640b63292e8b9680"
+    },
+    {
+      "id": "go/kimi-k3",
+      "model": "Kimi-K3",
+      "game": "go",
+      "motif_count": 30,
+      "run_id": "go-bp-completion-20260924/completed/runs/kimi3",
+      "sha256": "832bd46aee30074d4c3ca43de5ef1eb085c4c16986795e958462d36e7a29a0ac"
+    },
+    {
+      "id": "go/qwen3.5-397b-a17b",
+      "model": "Qwen3.5-397B-A17B",
+      "game": "go",
+      "motif_count": 31,
+      "run_id": "basis_api_runs/tokenfactory_go_bp_max64k_100it_c070_20260721_102438/go/qwen35/run",
+      "sha256": "595671d93ff699e589116844d7638d2cc534985fe60a8d33ce39687f1a5d423e"
+    }
+  ]
+}

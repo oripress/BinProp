@@ -1,0 +1,491 @@
+{
+  "schema_version": 1,
+  "game": "chess",
+  "motifs": [
+    {
+      "id": "5b2e141c88679b6c",
+      "name": "king_safety_pawn_storm",
+      "description": "The side to move has more pawns on the wing where the opponent king is located than the opponent has on the side-to-move king wing, indicating a pawn storm advantage.",
+      "source": "MOTIF_NAME = 'king_safety_pawn_storm'\nMOTIF_DESCRIPTION = 'The side to move has more pawns on the wing where the opponent king is located than the opponent has on the side-to-move king wing, indicating a pawn storm advantage.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    opp_king_sq = board.king(opp)\n    if opp_king_sq is None:\n        return False\n    stm_king_sq = board.king(stm)\n    if stm_king_sq is None:\n        return False\n    \n    opp_kf = chess.square_file(opp_king_sq)\n    stm_kf = chess.square_file(stm_king_sq)\n    \n    def wing_pawns(color, king_file):\n        count = 0\n        for sq in board.pieces(chess.PAWN, color):\n            f = chess.square_file(sq)\n            r = chess.square_rank(sq)\n            if king_file <= 3:\n                if f <= 3:\n                    count += 1\n            else:\n                if f >= 4:\n                    count += 1\n        return count\n    \n    stm_storm = wing_pawns(stm, opp_kf)\n    opp_storm = wing_pawns(opp, stm_kf)\n    \n    return stm_storm > opp_storm",
+      "delta": 0.16791999999999999
+    },
+    {
+      "id": "ce328cceb0bc2dfc",
+      "name": "king_pawn_shield_intact",
+      "description": "The side to move has more pawns on the files adjacent to its own king than the opponent has near theirs.",
+      "source": "MOTIF_NAME = 'king_pawn_shield_intact'\nMOTIF_DESCRIPTION = 'The side to move has more pawns on the files adjacent to its own king than the opponent has near theirs.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    def shield_pawns(king_sq, color):\n        king_file = chess.square_file(king_sq)\n        king_rank = chess.square_rank(king_sq)\n        count = 0\n        for df in (-1, 0, 1):\n            f = king_file + df\n            if f < 0 or f > 7:\n                continue\n            # Look for friendly pawns on ranks that shield (in front of king)\n            for r in range(king_rank + (1 if color == chess.WHITE else -1),\n                           king_rank + (3 if color == chess.WHITE else -3),\n                           1 if color == chess.WHITE else -1):\n                if r < 0 or r > 7:\n                    break\n                sq = chess.square(f, r)\n                piece = board.piece_at(sq)\n                if piece and piece.piece_type == chess.PAWN and piece.color == color:\n                    count += 1\n                    break  # one pawn per file is enough for the shield\n        return count\n\n    stm_king = board.king(stm)\n    opp_king = board.king(opp)\n    if stm_king is None or opp_king is None:\n        return False\n\n    stm_shield = shield_pawns(stm_king, stm)\n    opp_shield = shield_pawns(opp_king, opp)\n\n    return stm_shield > opp_shield",
+      "delta": 0.12187999999999999
+    },
+    {
+      "id": "1e9eaaaa85752d2d",
+      "name": "king_attack_pressure",
+      "description": "The side to move attacks more squares adjacent to the opponent king than the opponent attacks adjacent to the side-to-move king, with a margin of at least 2.",
+      "source": "MOTIF_NAME = 'king_attack_pressure'\nMOTIF_DESCRIPTION = 'The side to move attacks more squares adjacent to the opponent king than the opponent attacks adjacent to the side-to-move king, with a margin of at least 2.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    # Find kings\n    stm_king_sq = board.king(stm)\n    opp_king_sq = board.king(opp)\n    if stm_king_sq is None or opp_king_sq is None:\n        return False\n    \n    # Get squares adjacent to each king\n    stm_king_adj = set()\n    opp_king_adj = set()\n    for sq in chess.SQUARES:\n        d = chess.square_distance(stm_king_sq, sq)\n        if 1 <= d <= 2:  # include both adjacent and 2 squares away for king zone\n            stm_king_adj.add(sq)\n        d2 = chess.square_distance(opp_king_sq, sq)\n        if 1 <= d2 <= 2:\n            opp_king_adj.add(sq)\n    \n    # Count attacks by stm on opponent king zone\n    stm_attacks_on_opp_zone = 0\n    for sq in opp_king_adj:\n        if board.attackers(stm, sq):\n            stm_attacks_on_opp_zone += 1\n    \n    # Count attacks by opponent on stm king zone\n    opp_attacks_on_stm_zone = 0\n    for sq in stm_king_adj:\n        if board.attackers(opp, sq):\n            opp_attacks_on_stm_zone += 1\n    \n    return stm_attacks_on_opp_zone >= opp_attacks_on_stm_zone + 2",
+      "delta": 0.12015
+    },
+    {
+      "id": "05e4ff6366082a48",
+      "name": "dominant_center_control",
+      "description": "The side to move controls more central squares (d4, e4, d5, e5) than the opponent.",
+      "source": "MOTIF_NAME = 'dominant_center_control'\nMOTIF_DESCRIPTION = 'The side to move controls more central squares (d4, e4, d5, e5) than the opponent.'\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    center = [chess.E4, chess.D4, chess.E5, chess.D5]\n    stm_ctrl = 0\n    opp_ctrl = 0\n    for sq in center:\n        if board.attackers(stm, sq):\n            stm_ctrl += 1\n        if board.attackers(opp, sq):\n            opp_ctrl += 1\n    return stm_ctrl > opp_ctrl",
+      "delta": 0.09454000000000001
+    },
+    {
+      "id": "3e272857e5a35756",
+      "name": "development_lead",
+      "description": "The side to move has more pieces (knights and bishops) off their back rank than the opponent, indicating a development advantage.",
+      "source": "MOTIF_NAME = 'development_lead'\nMOTIF_DESCRIPTION = 'The side to move has more pieces (knights and bishops) off their back rank than the opponent, indicating a development advantage.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    # Define back rank squares for each color\n    if stm == chess.WHITE:\n        stm_back_rank = [chess.square(f, 0) for f in range(8)]\n        opp_back_rank = [chess.square(f, 7) for f in range(8)]\n    else:\n        stm_back_rank = [chess.square(f, 7) for f in range(8)]\n        opp_back_rank = [chess.square(f, 0) for f in range(8)]\n    \n    stm_developed = 0\n    opp_developed = 0\n    \n    # Count developed minor pieces for stm\n    stm_minors = list(board.pieces(chess.KNIGHT, stm)) + list(board.pieces(chess.BISHOP, stm))\n    for sq in stm_minors:\n        if sq not in stm_back_rank:\n            stm_developed += 1\n            \n    # Count developed minor pieces for opponent\n    opp_minors = list(board.pieces(chess.KNIGHT, opp)) + list(board.pieces(chess.BISHOP, opp))\n    for sq in opp_minors:\n        if sq not in opp_back_rank:\n            opp_developed += 1\n    \n    # Only fire if stm has at least one developed piece\n    if stm_developed == 0:\n        return False\n        \n    # Require development lead of at least 1\n    return stm_developed > opp_developed",
+      "delta": 0.07530000000000003
+    },
+    {
+      "id": "cc0d4c104ce24cc1",
+      "name": "fewer_pawn_islands",
+      "description": "The side to move has fewer pawn islands than the opponent, indicating a healthier pawn structure.",
+      "source": "MOTIF_NAME = 'fewer_pawn_islands'\nMOTIF_DESCRIPTION = 'The side to move has fewer pawn islands than the opponent, indicating a healthier pawn structure.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    def count_islands(color):\n        pawns = board.pieces(chess.PAWN, color)\n        visited = set()\n        islands = 0\n        for sq in pawns:\n            if sq in visited:\n                continue\n            islands += 1\n            stack = [sq]\n            visited.add(sq)\n            while stack:\n                csq = stack.pop()\n                cf = chess.square_file(csq)\n                cr = chess.square_rank(csq)\n                for df in [-1, 0, 1]:\n                    for dr in [-1, 0, 1]:\n                        if df == 0 and dr == 0:\n                            continue\n                        nf = cf + df\n                        nr = cr + dr\n                        if 0 <= nf <= 7 and 0 <= nr <= 7:\n                            nsq = chess.square(nf, nr)\n                            if nsq in pawns and nsq not in visited:\n                                visited.add(nsq)\n                                stack.append(nsq)\n            # Also check squares that are connected via same file adjacent ranks are part of same island\n            # Actually, the above with all 8 directions already handles connectivity\n        \n        return islands\n    \n    stm_islands = count_islands(stm)\n    opp_islands = count_islands(opp)\n    \n    return stm_islands < opp_islands",
+      "delta": 0.06881000000000004
+    },
+    {
+      "id": "690327a464bc7e18",
+      "name": "knight_attacking_king_zone",
+      "description": "The side to move has a knight attacking squares near the opponent king while the opponent has no equivalent attack.",
+      "source": "MOTIF_NAME = 'knight_attacking_king_zone'\nMOTIF_DESCRIPTION = 'The side to move has a knight attacking squares near the opponent king while the opponent has no equivalent attack.'\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    opp_king_sq = board.king(opp)\n    if opp_king_sq is None:\n        return False\n    \n    king_zone = []\n    for sq in chess.SQUARES:\n        if chess.square_distance(opp_king_sq, sq) <= 2:\n            king_zone.append(sq)\n    \n    stm_knights = board.pieces(chess.KNIGHT, stm)\n    stm_attacks = 0\n    for knight_sq in stm_knights:\n        for target in chess.SQUARES:\n            if target in king_zone:\n                if target in board.attacks(knight_sq):\n                    piece = board.piece_at(target)\n                    if piece is None or piece.color == opp:\n                        stm_attacks += 1\n    \n    stm_king_sq = board.king(stm)\n    if stm_king_sq is None:\n        return False\n    stm_king_zone = []\n    for sq in chess.SQUARES:\n        if chess.square_distance(stm_king_sq, sq) <= 2:\n            stm_king_zone.append(sq)\n    \n    opp_knights = board.pieces(chess.KNIGHT, opp)\n    opp_attacks = 0\n    for knight_sq in opp_knights:\n        for target in chess.SQUARES:\n            if target in stm_king_zone:\n                if target in board.attacks(knight_sq):\n                    piece = board.piece_at(target)\n                    if piece is None or piece.color == stm:\n                        opp_attacks += 1\n    \n    return stm_attacks > opp_attacks",
+      "delta": 0.06751000000000001
+    },
+    {
+      "id": "ab46bdf523efaa49",
+      "name": "restricted_opponent_pieces",
+      "description": "The side to move has more opponent pieces (queen, rooks, bishops, knights) on ranks 1-2 from their perspective than the opponent has restricted pieces on the side-to-move side, indicating a space advantage cramping the opponent.",
+      "source": "MOTIF_NAME = 'restricted_opponent_pieces'\nMOTIF_DESCRIPTION = 'The side to move has more opponent pieces (queen, rooks, bishops, knights) on ranks 1-2 from their perspective than the opponent has restricted pieces on the side-to-move side, indicating a space advantage cramping the opponent.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    # Count opponent pieces restricted to their home ranks (1-2 from their own side)\n    stm_restricted = 0\n    opp_restricted = 0\n    \n    for sq in chess.SQUARES:\n        piece = board.piece_at(sq)\n        if piece is None:\n            continue\n        if piece.piece_type == chess.PAWN or piece.piece_type == chess.KING:\n            continue\n            \n        rank = chess.square_rank(sq)\n        if piece.color == opp:\n            # From opponent's perspective, ranks 0-1 are home ranks\n            if piece.color == chess.WHITE:\n                if rank <= 1:\n                    stm_restricted += 1\n            else:\n                if rank >= 6:\n                    stm_restricted += 1\n        elif piece.color == stm:\n            if piece.color == chess.WHITE:\n                if rank <= 1:\n                    opp_restricted += 1\n            else:\n                if rank >= 6:\n                    opp_restricted += 1\n    \n    return stm_restricted > opp_restricted and stm_restricted >= 1",
+      "delta": 0.06680000000000003
+    },
+    {
+      "id": "996b3af5232d4010",
+      "name": "centralized_active_piece_advantage",
+      "description": "The side to move has a knight or bishop on or beyond the fourth rank (from its perspective) that attacks at least one central square, while the opponent has no such active minor piece.",
+      "source": "MOTIF_NAME = 'centralized_active_piece_advantage'\nMOTIF_DESCRIPTION = 'The side to move has a knight or bishop on or beyond the fourth rank (from its perspective) that attacks at least one central square, while the opponent has no such active minor piece.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    central_squares = {chess.D4, chess.E4, chess.D5, chess.E5}\n    \n    def has_active_minor(color):\n        for piece_type in (chess.KNIGHT, chess.BISHOP):\n            for sq in board.pieces(piece_type, color):\n                rank = chess.square_rank(sq)\n                if (color == chess.WHITE and rank >= 3) or (color == chess.BLACK and rank <= 4):\n                    if any(t in central_squares for t in board.attacks(sq)):\n                        return True\n        return False\n    \n    stm_has = has_active_minor(stm)\n    opp_has = has_active_minor(opp)\n    return stm_has and not opp_has",
+      "delta": 0.06350999999999998
+    },
+    {
+      "id": "d124404b1ab9eada",
+      "name": "advanced_pawn_chain_advantage",
+      "description": "The side to move has more pawns on the fifth rank or beyond than the opponent, indicating superior space and advanced structure.",
+      "source": "MOTIF_NAME = 'advanced_pawn_chain_advantage'\nMOTIF_DESCRIPTION = 'The side to move has more pawns on the fifth rank or beyond than the opponent, indicating superior space and advanced structure.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    # Count advanced pawns for each side (rank 5+ for White, rank 4- for Black)\n    # For side to move: if White, advanced means rank >= 5 (index 4+); if Black, rank <= 4 (index 3-)\n    stm_advanced = 0\n    opp_advanced = 0\n    \n    for sq in chess.SQUARES:\n        piece = board.piece_at(sq)\n        if piece is None or piece.piece_type != chess.PAWN:\n            continue\n        rank = chess.square_rank(sq)\n        if piece.color == chess.WHITE:\n            if rank >= 4:  # rank 5 (index 4) or higher\n                if piece.color == stm:\n                    stm_advanced += 1\n                else:\n                    opp_advanced += 1\n        else:  # BLACK\n            if rank <= 3:  # rank 4 (index 3) or lower\n                if piece.color == stm:\n                    stm_advanced += 1\n                else:\n                    opp_advanced += 1\n    \n    return stm_advanced > opp_advanced",
+      "delta": 0.05836999999999998
+    },
+    {
+      "id": "8fdec2a3d58223ad",
+      "name": "rook_on_open_file",
+      "description": "The side to move has a rook on a file with no pawns of either color, while the opponent has no such rook.",
+      "source": "MOTIF_NAME = 'rook_on_open_file'\nMOTIF_DESCRIPTION = 'The side to move has a rook on a file with no pawns of either color, while the opponent has no such rook.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    def rook_on_open_file(color):\n        for rook_sq in board.pieces(chess.ROOK, color):\n            file_idx = chess.square_file(rook_sq)\n            has_pawn = False\n            for rank in range(8):\n                sq = chess.square(file_idx, rank)\n                p = board.piece_at(sq)\n                if p and p.piece_type == chess.PAWN:\n                    has_pawn = True\n                    break\n            if not has_pawn:\n                return True\n        return False\n    \n    stm_has = rook_on_open_file(stm)\n    opp_has = rook_on_open_file(opp)\n    \n    return stm_has and not opp_has",
+      "delta": 0.05783999999999999
+    },
+    {
+      "id": "0a03dea55872419c",
+      "name": "safe_pawn_break_threat",
+      "description": "The side to move threatens a pawn break that would open lines against the opponent king, while the opponent has no comparable threat.",
+      "source": "MOTIF_NAME = 'safe_pawn_break_threat'\nMOTIF_DESCRIPTION = 'The side to move threatens a pawn break that would open lines against the opponent king, while the opponent has no comparable threat.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    # Find opponent king\n    opp_king_sq = board.king(opp)\n    if opp_king_sq is None:\n        return False\n    opp_kf = chess.square_file(opp_king_sq)\n    opp_kr = chess.square_rank(opp_king_sq)\n    \n    # Define king zone for opponent (king square and adjacent squares)\n    king_zone = set()\n    for df in (-1, 0, 1):\n        for dr in (-1, 0, 1):\n            f = opp_kf + df\n            r = opp_kr + dr\n            if 0 <= f <= 7 and 0 <= r <= 7:\n                king_zone.add(chess.square(f, r))\n    \n    # Helper: check if a pawn advance opens a line (file, rank, diagonal) toward king zone\n    def pawn_advances_toward_king(pawn_sq, color):\n        pf = chess.square_file(pawn_sq)\n        pr = chess.square_rank(pawn_sq)\n        direction = 1 if color == chess.WHITE else -1\n        # One square advance\n        target_sq = chess.square(pf, pr + direction)\n        if 0 <= pr + direction <= 7:\n            # Remove pawn temporarily to see what lines open\n            board_copy = board.copy()\n            board_copy.remove_piece_at(pawn_sq)\n            # Check if any piece attacks king zone squares through the vacated file/diagonal\n            for sq in king_zone:\n                attackers = board_copy.attackers(color, sq)\n                for att_sq in attackers:\n                    piece = board_copy.piece_at(att_sq)\n                    if piece and piece.piece_type in (chess.QUEEN, chess.ROOK, chess.BISHOP):\n                        # Check line of sight\n                        if board_copy.attacks(att_sq) & chess.SquareSet(1 << sq):\n                            # Make sure the pawn move doesn't just expose the king\n                            stm_king_sq = board.king(color)\n                            if stm_king_sq is None or not board_copy.is_attacked_by(opp, stm_king_sq):\n                                return True\n        # Two square advance for pawns on starting rank\n        start_rank = 1 if color == chess.WHITE else 6\n        if pr == start_rank:\n            target_sq = chess.square(pf, pr + 2*direction)\n            if 0 <= pr + 2*direction <= 7:\n                board_copy = board.copy()\n                board_copy.remove_piece_at(pawn_sq)\n                for sq in king_zone:\n                    attackers = board_copy.attackers(color, sq)\n                    for att_sq in attackers:\n                        piece = board_copy.piece_at(att_sq)\n                        if piece and piece.piece_type in (chess.QUEEN, chess.ROOK, chess.BISHOP):\n                            if board_copy.attacks(att_sq) & chess.SquareSet(1 << sq):\n                                stm_king_sq = board.king(color)\n                                if stm_king_sq is None or not board_copy.is_attacked_by(opp, stm_king_sq):\n                                    return True\n        return False\n    \n    # Check if stm has a pawn break toward opponent king\n    stm_has_break = False\n    for pawn_sq in board.pieces(chess.PAWN, stm):\n        if pawn_advances_toward_king(pawn_sq, stm):\n            stm_has_break = True\n            break\n    \n    if not stm_has_break:\n        return False\n    \n    # Check if opponent has a pawn break toward stm king\n    stm_king_sq = board.king(stm)\n    if stm_king_sq is None:\n        return False\n    stm_kf = chess.square_file(stm_king_sq)\n    stm_kr = chess.square_rank(stm_king_sq)\n    stm_king_zone = set()\n    for df in (-1, 0, 1):\n        for dr in (-1, 0, 1):\n            f = stm_kf + df\n            r = stm_kr + dr\n            if 0 <= f <= 7 and 0 <= r <= 7:\n                stm_king_zone.add(chess.square(f, r))\n    \n    # Temporarily override king_zone for opponent check\n    orig_king_zone = king_zone\n    # Use a local function to check opp breaks\n    def opp_pawn_advances_toward_king(pawn_sq, color):\n        pf = chess.square_file(pawn_sq)\n        pr = chess.square_rank(pawn_sq)\n        direction = 1 if color == chess.WHITE else -1\n        target_sq = chess.square(pf, pr + direction)\n        if 0 <= pr + direction <= 7:\n            board_copy = board.copy()\n            board_copy.remove_piece_at(pawn_sq)\n            for sq in stm_king_zone:\n                attackers = board_copy.attackers(color, sq)\n                for att_sq in attackers:\n                    piece = board_copy.piece_at(att_sq)\n                    if piece and piece.piece_type in (chess.QUEEN, chess.ROOK, chess.BISHOP):\n                        if board_copy.attacks(att_sq) & chess.SquareSet(1 << sq):\n                            opp_king_sq2 = board.king(color)\n                            if opp_king_sq2 is None or not board_copy.is_attacked_by(stm, opp_king_sq2):\n                                return True\n        start_rank = 1 if color == chess.WHITE else 6\n        if pr == start_rank:\n            target_sq = chess.square(pf, pr + 2*direction)\n            if 0 <= pr + 2*direction <= 7:\n                board_copy = board.copy()\n                board_copy.remove_piece_at(pawn_sq)\n                for sq in stm_king_zone:\n                    attackers = board_copy.attackers(color, sq)\n                    for att_sq in attackers:\n                        piece = board_copy.piece_at(att_sq)\n                        if piece and piece.piece_type in (chess.QUEEN, chess.ROOK, chess.BISHOP):\n                            if board_copy.attacks(att_sq) & chess.SquareSet(1 << sq):\n                                opp_king_sq2 = board.king(color)\n                                if opp_king_sq2 is None or not board_copy.is_attacked_by(stm, opp_king_sq2):\n                                    return True\n        return False\n    \n    for pawn_sq in board.pieces(chess.PAWN, opp):\n        if opp_pawn_advances_toward_king(pawn_sq, opp):\n            return False\n    \n    return True",
+      "delta": 0.05571999999999999
+    },
+    {
+      "id": "f99a7a4bb77030ee",
+      "name": "bishop_blocked_by_own_pawns",
+      "description": "The side to move has a bishop on the same color as its own pawns on that color's central squares, without the opponent having the same restriction.",
+      "source": "MOTIF_NAME = 'bishop_blocked_by_own_pawns'\nMOTIF_DESCRIPTION = 'The side to move has a bishop on the same color as its own pawns on that color\\'s central squares, without the opponent having the same restriction.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    CENTER_SQUARES = [chess.E4, chess.D4, chess.E5, chess.D5]\n\n    def count_blocked_bishop_squares(color):\n        count = 0\n        for sq in board.pieces(chess.BISHOP, color):\n            sq_color = (chess.square_file(sq) + chess.square_rank(sq)) % 2\n            for cs in CENTER_SQUARES:\n                if (chess.square_file(cs) + chess.square_rank(cs)) % 2 == sq_color:\n                    if board.piece_at(cs) and board.piece_at(cs).piece_type == chess.PAWN and board.piece_at(cs).color == color:\n                        count += 1\n                        break\n        return count\n\n    stm_blocked = count_blocked_bishop_squares(stm)\n    opp_blocked = count_blocked_bishop_squares(opp)\n    return stm_blocked > opp_blocked",
+      "delta": 0.04893
+    },
+    {
+      "id": "a0b6ec3a771cd89f",
+      "name": "connected_rooks",
+      "description": "The side to move has two rooks connected (on same rank or file with no pieces between them) while the opponent does not.",
+      "source": "MOTIF_NAME = 'connected_rooks'\nMOTIF_DESCRIPTION = 'The side to move has two rooks connected (on same rank or file with no pieces between them) while the opponent does not.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    stm_rooks = board.pieces(chess.ROOK, stm)\n    if len(stm_rooks) < 2:\n        return False\n\n    # Determine if stm has two connected rooks (same rank, clear path between them)\n    stm_has_connected = False\n    rook_list = list(stm_rooks)\n    for i in range(len(rook_list)):\n        r1 = rook_list[i]\n        f1 = chess.square_file(r1)\n        rk1 = chess.square_rank(r1)\n        for j in range(i + 1, len(rook_list)):\n            r2 = rook_list[j]\n            f2 = chess.square_file(r2)\n            rk2 = chess.square_rank(r2)\n            if f1 == f2:\n                # Same file: check if no pieces between them\n                lo = min(rk1, rk2)\n                hi = max(rk1, rk2)\n                clear = True\n                for rk in range(lo + 1, hi):\n                    sq = chess.square(f1, rk)\n                    if board.piece_at(sq) is not None:\n                        clear = False\n                        break\n                if clear:\n                    stm_has_connected = True\n                    break\n            elif rk1 == rk2:\n                # Same rank: check if no pieces between them\n                lo = min(f1, f2)\n                hi = max(f1, f2)\n                clear = True\n                for f in range(lo + 1, hi):\n                    sq = chess.square(f, rk1)\n                    if board.piece_at(sq) is not None:\n                        clear = False\n                        break\n                if clear:\n                    stm_has_connected = True\n                    break\n        if stm_has_connected:\n            break\n\n    if not stm_has_connected:\n        return False\n\n    # Check opponent does not have connected rooks\n    opp_rooks = board.pieces(chess.ROOK, opp)\n    if len(opp_rooks) < 2:\n        return True\n\n    opp_rook_list = list(opp_rooks)\n    for i in range(len(opp_rook_list)):\n        r1 = opp_rook_list[i]\n        f1 = chess.square_file(r1)\n        rk1 = chess.square_rank(r1)\n        for j in range(i + 1, len(opp_rook_list)):\n            r2 = opp_rook_list[j]\n            f2 = chess.square_file(r2)\n            rk2 = chess.square_rank(r2)\n            if f1 == f2:\n                lo = min(rk1, rk2)\n                hi = max(rk1, rk2)\n                clear = True\n                for rk in range(lo + 1, hi):\n                    sq = chess.square(f1, rk)\n                    if board.piece_at(sq) is not None:\n                        clear = False\n                        break\n                if clear:\n                    return False\n            elif rk1 == rk2:\n                lo = min(f1, f2)\n                hi = max(f1, f2)\n                clear = True\n                for f in range(lo + 1, hi):\n                    sq = chess.square(f, rk1)\n                    if board.piece_at(sq) is not None:\n                        clear = False\n                        break\n                if clear:\n                    return False\n    return True",
+      "delta": 0.04161999999999999
+    },
+    {
+      "id": "a80e7d9e0bcbe543",
+      "name": "bishop_attacking_king_zone",
+      "description": "The side to move has a bishop attacking squares adjacent to the opponent king while the opponent has no such bishop attack on the side-to-move king.",
+      "source": "MOTIF_NAME = 'bishop_attacking_king_zone'\nMOTIF_DESCRIPTION = 'The side to move has a bishop attacking squares adjacent to the opponent king while the opponent has no such bishop attack on the side-to-move king.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    opp_king_sq = board.king(opp)\n    if opp_king_sq is None:\n        return False\n    stm_king_sq = board.king(stm)\n    if stm_king_sq is None:\n        return False\n    \n    king_zone = []\n    kf = chess.square_file(opp_king_sq)\n    kr = chess.square_rank(opp_king_sq)\n    for df in (-1, 0, 1):\n        for dr in (-1, 0, 1):\n            if df == 0 and dr == 0:\n                continue\n            nf = kf + df\n            nr = kr + dr\n            if 0 <= nf <= 7 and 0 <= nr <= 7:\n                king_zone.append(chess.square(nf, nr))\n    \n    stm_bishops = board.pieces(chess.BISHOP, stm)\n    stm_attacks_zone = False\n    for bsq in stm_bishops:\n        attacks = board.attacks(bsq)\n        for zsq in king_zone:\n            if zsq in attacks:\n                stm_attacks_zone = True\n                break\n        if stm_attacks_zone:\n            break\n    \n    if not stm_attacks_zone:\n        return False\n    \n    stm_king_zone = []\n    kf2 = chess.square_file(stm_king_sq)\n    kr2 = chess.square_rank(stm_king_sq)\n    for df in (-1, 0, 1):\n        for dr in (-1, 0, 1):\n            if df == 0 and dr == 0:\n                continue\n            nf = kf2 + df\n            nr = kr2 + dr\n            if 0 <= nf <= 7 and 0 <= nr <= 7:\n                stm_king_zone.append(chess.square(nf, nr))\n    \n    opp_bishops = board.pieces(chess.BISHOP, opp)\n    opp_attacks_zone = False\n    for bsq in opp_bishops:\n        attacks = board.attacks(bsq)\n        for zsq in stm_king_zone:\n            if zsq in attacks:\n                opp_attacks_zone = True\n                break\n        if opp_attacks_zone:\n            break\n    \n    return not opp_attacks_zone",
+      "delta": 0.03894
+    },
+    {
+      "id": "ef44c31c4aaa4adc",
+      "name": "knight_outpost_attacking_center",
+      "description": "The side to move has a knight on a protected outpost square (immune to opponent pawns, defended by a friendly pawn) that attacks at least one central square (d4,e4,d5,e5), while the opponent has no such knight.",
+      "source": "MOTIF_NAME = 'knight_outpost_attacking_center'\nMOTIF_DESCRIPTION = 'The side to move has a knight on a protected outpost square (immune to opponent pawns, defended by a friendly pawn) that attacks at least one central square (d4,e4,d5,e5), while the opponent has no such knight.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    central_squares = [chess.E4, chess.D4, chess.E5, chess.D5]\n\n    def is_protected_outpost(sq, color):\n        if board.piece_at(sq) is None:\n            return False\n        piece = board.piece_at(sq)\n        if piece.piece_type != chess.KNIGHT or piece.color != color:\n            return False\n        # Not attackable by opponent pawns\n        opp_pawn_attacks = board.pieces(chess.PAWN, not color)\n        for psq in opp_pawn_attacks:\n            attacks = board.attacks(psq)\n            if sq in attacks:\n                return False\n        # Defended by a friendly pawn\n        friendly_pawns = board.pieces(chess.PAWN, color)\n        for psq in friendly_pawns:\n            attacks = board.attacks(psq)\n            if sq in attacks:\n                return True\n        return False\n\n    def attacks_center(sq):\n        kn_attacks = board.attacks(sq)\n        for csq in central_squares:\n            if csq in kn_attacks:\n                return True\n        return False\n\n    stm_has = False\n    for sq in board.pieces(chess.KNIGHT, stm):\n        if is_protected_outpost(sq, stm) and attacks_center(sq):\n            stm_has = True\n            break\n\n    if not stm_has:\n        return False\n\n    opp_has = False\n    for sq in board.pieces(chess.KNIGHT, opp):\n        if is_protected_outpost(sq, opp) and attacks_center(sq):\n            opp_has = True\n            break\n\n    return not opp_has",
+      "delta": 0.03658
+    },
+    {
+      "id": "698525a93a891377",
+      "name": "bishop_on_weak_color_complex",
+      "description": "The side to move has a bishop and the opponent has no bishop that can guard the squares on the bishop color, because all their pawns are on squares of that bishop color, while the opponent does not have such a bishop-versus-pawns color weakness to exploit.",
+      "source": "MOTIF_NAME = 'bishop_on_weak_color_complex'\nMOTIF_DESCRIPTION = 'The side to move has a bishop and the opponent has no bishop that can guard the squares on the bishop color, because all their pawns are on squares of that bishop color, while the opponent does not have such a bishop-versus-pawns color weakness to exploit.'\nMOTIF_NAME = 'bishop_on_weak_color_complex'\nMOTIF_DESCRIPTION = 'The side to move has a bishop and the opponent has no bishop that can guard the squares on the bishop color, because all their pawns are on squares of that bishop color, while the opponent does not have such a bishop-versus-pawns color weakness to exploit.'\n\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    def has_bishop_color_weakness(color, other_color):\n        bishops = board.pieces(chess.BISHOP, color)\n        if not bishops:\n            return False\n        opp_bishops = board.pieces(chess.BISHOP, other_color)\n        opp_pawns = board.pieces(chess.PAWN, other_color)\n        if not opp_pawns:\n            return False\n        \n        for b_sq in bishops:\n            b_color = (chess.square_file(b_sq) + chess.square_rank(b_sq)) % 2\n            opp_pawns_on_color = sum(1 for psq in opp_pawns \n                                     if (chess.square_file(psq) + chess.square_rank(psq)) % 2 == b_color)\n            total_opp_pawns = len(opp_pawns)\n            if total_opp_pawns == 0:\n                continue\n            pawn_ratio = opp_pawns_on_color / total_opp_pawns\n            \n            opp_bishops_guard = any(1 for ob_sq in opp_bishops \n                                    if (chess.square_file(ob_sq) + chess.square_rank(ob_sq)) % 2 != b_color)\n            \n            if pawn_ratio >= 0.6 and not opp_bishops_guard:\n                return True\n        return False\n\n    stm_weak = has_bishop_color_weakness(stm, opp)\n    opp_weak = has_bishop_color_weakness(opp, stm)\n    return stm_weak and not opp_weak",
+      "delta": 0.03597
+    },
+    {
+      "id": "954a09e9c1311116",
+      "name": "knight_vs_bishop_control_imbalance",
+      "description": "The side to move has more knights on outpost squares (protected by pawns, not attackable by opponent pawns) than the opponent has bishops on open diagonals (diagonals with no friendly pawns blocking), indicating a positional piece-type advantage.",
+      "source": "MOTIF_NAME = 'knight_vs_bishop_control_imbalance'\nMOTIF_DESCRIPTION = 'The side to move has more knights on outpost squares (protected by pawns, not attackable by opponent pawns) than the opponent has bishops on open diagonals (diagonals with no friendly pawns blocking), indicating a positional piece-type advantage.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    def is_outpost(sq, color):\n        # Knight on a square protected by a friendly pawn and not attackable by opponent pawns\n        if not board.attackers(color, sq):\n            return False\n        if board.attackers(opp, sq) & board.pieces(chess.PAWN, opp):\n            return False\n        # Must be protected by a friendly pawn\n        pawn_attackers = board.attackers(color, sq) & board.pieces(chess.PAWN, color)\n        return bool(pawn_attackers)\n\n    def has_open_diagonal(sq, color):\n        # Bishop on a diagonal with no friendly pawns on squares of same color\n        f, r = chess.square_file(sq), chess.square_rank(sq)\n        sq_color = (f + r) % 2\n        for osq in chess.SQUARES:\n            of, or_ = chess.square_file(osq), chess.square_rank(osq)\n            if (of + or_) % 2 == sq_color:\n                p = board.piece_at(osq)\n                if p and p.piece_type == chess.PAWN and p.color == color:\n                    if of != f:  # Same color square, different file means same diagonal complex\n                        # Check if on same diagonal\n                        if abs(of - f) == abs(or_ - r) and (of != f):\n                            return False\n        return True\n\n    stm_knights = board.pieces(chess.KNIGHT, stm)\n    opp_bishops = board.pieces(chess.BISHOP, opp)\n\n    stm_outposts = 0\n    for sq in stm_knights:\n        if is_outpost(sq, stm):\n            stm_outposts += 1\n\n    opp_open_bishops = 0\n    for sq in opp_bishops:\n        if has_open_diagonal(sq, opp):\n            opp_open_bishops += 1\n\n    if stm_outposts == 0:\n        return False\n    return stm_outposts > opp_open_bishops",
+      "delta": 0.03556999999999999
+    },
+    {
+      "id": "2dab0741cefb00a0",
+      "name": "queenside_pawn_majority_advantage",
+      "description": "The side to move has more pawns on the queenside (files a-d) than the opponent, with a margin of at least 2, indicating a favorable pawn majority for creating passed pawns.",
+      "source": "MOTIF_NAME = 'queenside_pawn_majority_advantage'\nMOTIF_DESCRIPTION = 'The side to move has more pawns on the queenside (files a-d) than the opponent, while the opponent king is not on the queenside, indicating a favorable pawn majority.'\nMOTIF_DESCRIPTION = 'The side to move has more pawns on the queenside (files a-d) than the opponent, with a margin of at least 2, indicating a favorable pawn majority for creating passed pawns.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    # Count pawns on queenside (files a-d) for both sides\n    stm_queenside = 0\n    opp_queenside = 0\n    for sq in board.pieces(chess.PAWN, stm):\n        if chess.square_file(sq) <= 3:\n            stm_queenside += 1\n    for sq in board.pieces(chess.PAWN, opp):\n        if chess.square_file(sq) <= 3:\n            opp_queenside += 1\n    \n    # Need a meaningful majority (at least 2 more pawns)\n    if stm_queenside - opp_queenside < 2:\n        return False\n    \n    # Check that opponent king is NOT on the queenside\n    opp_king_sq = board.king(opp)\n    if opp_king_sq is None:\n        return False\n    opp_king_file = chess.square_file(opp_king_sq)\n    if opp_king_file <= 3:\n        return False\n    \n    # Also check that side-to-move king is relatively safe (not on queenside under attack)\n    stm_king_sq = board.king(stm)\n    if stm_king_sq is None:\n        return False\n    stm_king_file = chess.square_file(stm_king_sq)\n    stm_king_rank = chess.square_rank(stm_king_sq)\n    \n    # If stm king is on queenside, ensure it's not under immediate threat\n    if stm_king_file <= 3:\n        attackers = board.attackers(opp, stm_king_sq)\n        if len(attackers) > 0:\n            return False\n    \n    return True",
+      "delta": 0.032200000000000006
+    },
+    {
+      "id": "9c916e4e61b0028d",
+      "name": "passed_pawn_protected",
+      "description": "The side to move has a passed pawn that is defended by a friendly pawn, while the opponent has no such supported passed pawn.",
+      "source": "MOTIF_NAME = 'passed_pawn_protected'\nMOTIF_DESCRIPTION = 'The side to move has a passed pawn that is defended by a friendly pawn, while the opponent has no such supported passed pawn.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    # Determine which ranks are the promotion direction for stm\n    if stm == chess.WHITE:\n        stm_pawn_dir = 1\n        stm_promotion_rank = 7\n        opp_pawn_dir = -1\n        opp_promotion_rank = 0\n    else:\n        stm_pawn_dir = -1\n        stm_promotion_rank = 0\n        opp_pawn_dir = 1\n        opp_promotion_rank = 7\n\n    def is_passed(color, sq):\n        \"\"\"Check if the pawn on sq is a passed pawn (no opponent pawns blocking its path).\"\"\"\n        f = chess.square_file(sq)\n        r = chess.square_rank(sq)\n        if color == chess.WHITE:\n            # Check ranks from r+1 to 7 on files f-1, f, f+1\n            for check_file in (f-1, f, f+1):\n                if 0 <= check_file <= 7:\n                    for check_rank in range(r + 1, 8):\n                        p = board.piece_at(chess.square(check_file, check_rank))\n                        if p and p.piece_type == chess.PAWN and p.color != color:\n                            return False\n        else:\n            for check_file in (f-1, f, f+1):\n                if 0 <= check_file <= 7:\n                    for check_rank in range(r - 1, -1, -1):\n                        p = board.piece_at(chess.square(check_file, check_rank))\n                        if p and p.piece_type == chess.PAWN and p.color != color:\n                            return False\n        return True\n\n    def supported_by_friendly_pawn(color, sq):\n        \"\"\"Check if any friendly pawn defends this square directly.\"\"\"\n        f = chess.square_file(sq)\n        r = chess.square_rank(sq)\n        if color == chess.WHITE:\n            # Pawns defend from one rank below, diagonally\n            if r > 0:\n                for df in (-1, 1):\n                    cf = f + df\n                    if 0 <= cf <= 7:\n                        defender = board.piece_at(chess.square(cf, r - 1))\n                        if defender and defender.piece_type == chess.PAWN and defender.color == color:\n                            return True\n        else:\n            if r < 7:\n                for df in (-1, 1):\n                    cf = f + df\n                    if 0 <= cf <= 7:\n                        defender = board.piece_at(chess.square(cf, r + 1))\n                        if defender and defender.piece_type == chess.PAWN and defender.color == color:\n                            return True\n        return False\n\n    stm_passed = 0\n    opp_passed = 0\n\n    for sq in chess.SQUARES:\n        p = board.piece_at(sq)\n        if not p or p.piece_type != chess.PAWN:\n            continue\n        if p.color == stm:\n            if is_passed(stm, sq) and supported_by_friendly_pawn(stm, sq):\n                stm_passed += 1\n        else:\n            if is_passed(opp, sq) and supported_by_friendly_pawn(opp, sq):\n                opp_passed += 1\n\n    return stm_passed > opp_passed",
+      "delta": 0.02824
+    },
+    {
+      "id": "917bde4ab41ff15a",
+      "name": "pawn_storm_against_kingside_castled_king",
+      "description": "The side to move has at least two pawns on the files in front of the opponent castled king (f/g/h files for kingside castle), while the opponent has fewer such pawns against the side-to-move king.",
+      "source": "MOTIF_NAME = 'pawn_storm_against_kingside_castled_king'\nMOTIF_DESCRIPTION = 'The side to move has at least two pawns on the files in front of the opponent castled king (f/g/h files for kingside castle), while the opponent has fewer such pawns against the side-to-move king.'\nMOTIF_DESCRIPTION = 'The side to move has at least two pawns on the files in front of the opponent castled king (f/g/h files for kingside castle), while the opponent has fewer such pawns against the side-to-move king.'\n\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    # Determine castling side for each king based on rook/king position\n    # Kingside castle: king on g-file and rook on f-file or h-file, or just king on g/h files near corner\n    # Simpler: if king is on g-file or h-file (files 6,7) and hasn't moved far from back rank, call it kingside\n    # Or: king is on files 6-7 and rank is 0 (stm) or 7 (opp) with rook nearby? \n    # Better: detect if king is on its back rank and on files e,f,g,h. If king on e-file with rook on h-file -> kingside potential.\n    # Actually, let's just check if opponent king is on kingside (files 6-7) and near back rank.\n    \n    opp_king_sq = board.king(opp)\n    if opp_king_sq is None:\n        return False\n    stm_king_sq = board.king(stm)\n    if stm_king_sq is None:\n        return False\n        \n    opp_king_file = chess.square_file(opp_king_sq)\n    opp_king_rank = chess.square_rank(opp_king_sq)\n    \n    # Check if opponent king is castled kingside: on files f,g,h and on ranks 0-1 or 6-7 (back two ranks)\n    # For Opp: if white, back rank is 0; if black, back rank is 7\n    if opp == chess.WHITE:\n        opp_back_rank = 0\n    else:\n        opp_back_rank = 7\n        \n    # Kingside castle: king on g-file (6) or h-file (7), or king on f-file (5) with rook on h-file\n    # Simplify: king on files >= 5 (e,f,g,h) and rank within 1 of back rank\n    if opp_king_file < 5:  # e-file or less -> not kingside\n        return False\n    if abs(opp_king_rank - opp_back_rank) > 1:\n        return False\n        \n    # Kingside files in front of opponent king: f, g, h (files 5,6,7) for the opponent's side\n    # Pawns on those files for STM, advanced (rank >= 4 for white STM, rank <= 3 for black STM? Actually just count STM pawns on those files)\n    # The pawn storm: STM has pawns on the files in front of opponent castled king\n    \n    # Define the kingside files relative to opponent\n    # f,g,h are files 5,6,7 regardless of color\n    ks_files = {5, 6, 7}\n    \n    stm_pawns_on_ks = 0\n    for sq in board.pieces(chess.PAWN, stm):\n        if chess.square_file(sq) in ks_files:\n            stm_pawns_on_ks += 1\n            \n    if stm_pawns_on_ks < 2:\n        return False\n        \n    # Now check STM king side; is STM castled kingside? If yes, opp should have fewer pawns on those files\n    stm_king_file = chess.square_file(stm_king_sq)\n    stm_king_rank = chess.square_rank(stm_king_sq)\n    if stm == chess.WHITE:\n        stm_back_rank = 0\n    else:\n        stm_back_rank = 7\n        \n    # If STM is also castled kingside, compare\n    stm_ks_castled = (stm_king_file >= 5 and abs(stm_king_rank - stm_back_rank) <= 1)\n    \n    if stm_ks_castled:\n        opp_pawns_on_ks = 0\n        for sq in board.pieces(chess.PAWN, opp):\n            if chess.square_file(sq) in ks_files:\n                opp_pawns_on_ks += 1\n        # STM must have more pawns on kingside files than opponent\n        if stm_pawns_on_ks <= opp_pawns_on_ks:\n            return False\n            \n    return True",
+      "delta": 0.026760000000000034
+    },
+    {
+      "id": "b9c07244777142dc",
+      "name": "bishop_pair_advantage",
+      "description": "The side to move has both bishops while the opponent has at most one bishop.",
+      "source": "MOTIF_NAME = 'bishop_pair_advantage'\nMOTIF_DESCRIPTION = 'The side to move has both bishops while the opponent has at most one bishop.'\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    stm_bishops = len(board.pieces(chess.BISHOP, stm))\n    opp_bishops = len(board.pieces(chess.BISHOP, opp))\n    return stm_bishops >= 2 and opp_bishops <= 1",
+      "delta": 0.026099999999999984
+    },
+    {
+      "id": "4496a25d8a8f7f5e",
+      "name": "knight_on_outpost",
+      "description": "The side to move has a knight on a square that cannot be attacked by opponent pawns and is protected by a friendly pawn.",
+      "source": "MOTIF_NAME = 'knight_on_outpost'\nMOTIF_DESCRIPTION = 'The side to move has a knight on a square that cannot be attacked by opponent pawns and is protected by a friendly pawn.'\ndef motif(fen: str) -> bool:\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    # Precompute opponent pawn squares\n    opp_pawn_squares = board.pieces(chess.PAWN, opp)\n    \n    # Precompute stm pawn squares\n    stm_pawn_squares = board.pieces(chess.PAWN, stm)\n    \n    # Helper to check if a square is attacked by any opponent pawn\n    def square_attacked_by_opp_pawn(sq):\n        file = chess.square_file(sq)\n        rank = chess.square_rank(sq)\n        if stm == chess.WHITE:\n            # Black pawns attack from rank+1\n            if rank <= 6:\n                attack_rank = rank + 1\n                if file > 0:\n                    if chess.square(file - 1, attack_rank) in opp_pawn_squares:\n                        return True\n                if file < 7:\n                    if chess.square(file + 1, attack_rank) in opp_pawn_squares:\n                        return True\n        else:\n            # White pawns attack from rank-1\n            if rank >= 1:\n                attack_rank = rank - 1\n                if file > 0:\n                    if chess.square(file - 1, attack_rank) in opp_pawn_squares:\n                        return True\n                if file < 7:\n                    if chess.square(file + 1, attack_rank) in opp_pawn_squares:\n                        return True\n        return False\n    \n    # Check each stm knight\n    for knight_sq in board.pieces(chess.KNIGHT, stm):\n        if square_attacked_by_opp_pawn(knight_sq):\n            continue\n        # Check if defended by at least one stm pawn\n        file = chess.square_file(knight_sq)\n        rank = chess.square_rank(knight_sq)\n        defended = False\n        if stm == chess.WHITE:\n            # White pawns defend from rank-1\n            if rank >= 1:\n                def_rank = rank - 1\n                if file > 0 and chess.square(file - 1, def_rank) in stm_pawn_squares:\n                    defended = True\n                if file < 7 and chess.square(file + 1, def_rank) in stm_pawn_squares:\n                    defended = True\n        else:\n            # Black pawns defend from rank+1\n            if rank <= 6:\n                def_rank = rank + 1\n                if file > 0 and chess.square(file - 1, def_rank) in stm_pawn_squares:\n                    defended = True\n                if file < 7 and chess.square(file + 1, def_rank) in stm_pawn_squares:\n                    defended = True\n        if defended:\n            # Additional condition: knight is on opponent's half or center\n            if stm == chess.WHITE and rank >= 4:\n                return True\n            if stm == chess.BLACK and rank <= 3:\n                return True\n            # Also consider knights on the 4th rank for both colors\n            if rank == 3 or rank == 4:\n                return True\n    return False",
+      "delta": 0.02095000000000001
+    },
+    {
+      "id": "8cedd4417eff5b59",
+      "name": "queen_attacking_king_zone_without_opponent",
+      "description": "The side to move has a queen attacking squares adjacent to the opponent king while the opponent has no queen attack on the side-to-move king zone.",
+      "source": "MOTIF_NAME = 'queen_attacking_king_zone_without_opponent'\nMOTIF_DESCRIPTION = 'The side to move has a queen attacking squares adjacent to the opponent king while the opponent has no queen attack on the side-to-move king zone.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    stm_king = board.king(stm)\n    opp_king = board.king(opp)\n    if stm_king is None or opp_king is None:\n        return False\n\n    def king_zone_squares(king_sq):\n        zone = set()\n        kf = chess.square_file(king_sq)\n        kr = chess.square_rank(king_sq)\n        for df in (-1, 0, 1):\n            for dr in (-1, 0, 1):\n                f = kf + df\n                r = kr + dr\n                if 0 <= f <= 7 and 0 <= r <= 7:\n                    zone.add(chess.square(f, r))\n        zone.discard(king_sq)\n        return zone\n\n    opp_zone = king_zone_squares(opp_king)\n    stm_zone = king_zone_squares(stm_king)\n\n    stm_queens = board.pieces(chess.QUEEN, stm)\n    opp_queens = board.pieces(chess.QUEEN, opp)\n\n    stm_attacks = False\n    for qsq in stm_queens:\n        attacked = board.attacks(qsq)\n        if attacked & opp_zone:\n            stm_attacks = True\n            break\n\n    opp_attacks = False\n    for qsq in opp_queens:\n        attacked = board.attacks(qsq)\n        if attacked & stm_zone:\n            opp_attacks = True\n            break\n\n    return stm_attacks and not opp_attacks",
+      "delta": 0.01711
+    },
+    {
+      "id": "1744b37be365c2ec",
+      "name": "rook_invading_opponent_territory",
+      "description": "The side to move has a rook on the opponent side of the board while the opponent has no rook on the side-to-move side.",
+      "source": "MOTIF_NAME = 'rook_invading_opponent_territory'\nMOTIF_DESCRIPTION = 'The side to move has a rook on the opponent side of the board while the opponent has no rook on the side-to-move side.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    stm_rooks = board.pieces(chess.ROOK, stm)\n    opp_rooks = board.pieces(chess.ROOK, opp)\n    \n    def on_opponent_half(sq, color):\n        rank = chess.square_rank(sq)\n        return (color == chess.WHITE and rank >= 4) or (color == chess.BLACK and rank <= 3)\n    \n    stm_has = any(on_opponent_half(sq, stm) for sq in stm_rooks)\n    opp_has = any(on_opponent_half(sq, opp) for sq in opp_rooks)\n    \n    return stm_has and not opp_has",
+      "delta": 0.01599
+    },
+    {
+      "id": "e05646d87822b016",
+      "name": "unstoppable_passed_pawn",
+      "description": "The side to move has a passed pawn that cannot be caught by the opponent.",
+      "source": "MOTIF_NAME = 'unstoppable_passed_pawn'\nMOTIF_DESCRIPTION = 'The side to move has a passed pawn that cannot be caught by the opponent.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    # Find all pawns for side to move\n    stm_pawns = board.pieces(chess.PAWN, stm)\n    if not stm_pawns:\n        return False\n    \n    opp_king_sq = board.king(opp)\n    if opp_king_sq is None:\n        return False\n    \n    stm_king_sq = board.king(stm)\n    \n    # Get opponent pawns for passed-pawn detection\n    opp_pawns = board.pieces(chess.PAWN, opp)\n    \n    for pawn_sq in stm_pawns:\n        file = chess.square_file(pawn_sq)\n        rank = chess.square_rank(pawn_sq)\n        \n        # Passed pawn check: no opponent pawns on same or adjacent files ahead\n        passed = True\n        if stm == chess.WHITE:\n            # White pawns go from rank 1 to 7\n            for f in (file-1, file, file+1):\n                if f < 0 or f > 7:\n                    continue\n                for r in range(rank+1, 8):\n                    sq = chess.square(f, r)\n                    if sq in opp_pawns:\n                        passed = False\n                        break\n                if not passed:\n                    break\n        else:\n            # Black pawns go from rank 6 down to 0\n            for f in (file-1, file, file+1):\n                if f < 0 or f > 7:\n                    continue\n                for r in range(rank-1, -1, -1):\n                    sq = chess.square(f, r)\n                    if sq in opp_pawns:\n                        passed = False\n                        break\n                if not passed:\n                    break\n        \n        if not passed:\n            continue\n        \n        # Now check if the opponent king can catch this pawn\n        promo_rank = 7 if stm == chess.WHITE else 0\n        if stm == chess.WHITE:\n            dist_to_promo = 7 - rank\n        else:\n            dist_to_promo = rank - 0\n        \n        # squares the pawn needs to advance through\n        pawn_path = []\n        if stm == chess.WHITE:\n            for r in range(rank, 8):\n                pawn_path.append(chess.square(file, r))\n        else:\n            for r in range(rank, -1, -1):\n                pawn_path.append(chess.square(file, r))\n        \n        # Minimal king distance to any square on the pawn's path\n        min_king_dist = min(chess.square_distance(opp_king_sq, sq) for sq in pawn_path)\n        \n        # Can opponent king intercept? Factor in whose turn it is (opp moves right after)\n        # If it's stm's turn, pawn has a head start\n        # Pawn needs dist_to_promo moves. King needs min_king_dist moves.\n        # But king can't move through pieces. Simplified: if king distance > pawn distance + 1, unstoppable\n        if min_king_dist > dist_to_promo + 1:\n            return True\n        \n        # Check if own king can block the opponent king from getting to the pawn\n        if stm_king_sq is not None:\n            # own king is close enough to shield\n            if chess.square_distance(stm_king_sq, pawn_sq) <= 3 and chess.square_distance(stm_king_sq, opp_king_sq) <= 2:\n                # own king can potentially block\n                pass # not strong enough on its own, continue to next checks\n        \n        # King can't reach any stop square of the pawn\n        if stm == chess.WHITE:\n            stops = []\n            if rank + 1 <= 7:\n                stops.append(chess.square(file, rank+1))\n            if rank == 1:  # double push possible?\n                if board.piece_at(chess.square(file, rank+1)) is None and board.piece_at(chess.square(file, rank+2)) is None:\n                    stops.append(chess.square(file, rank+2))\n            if rank + 2 <= 7:\n                stops.append(chess.square(file, rank+2))\n        else:\n            stops = []\n            if rank - 1 >= 0:\n                stops.append(chess.square(file, rank-1))\n            if rank == 6:\n                if board.piece_at(chess.square(file, rank-1)) is None and board.piece_at(chess.square(file, rank-2)) is None:\n                    stops.append(chess.square(file, rank-2))\n            if rank - 2 >= 0:\n                stops.append(chess.square(file, rank-2))\n        \n        if stops and all(chess.square_distance(opp_king_sq, s) > 1 for s in stops):\n            # King is too far to immediately block; check further\n            # Recalculate properly: king needs to reach some square on the pawn's forward path\n            # before the pawn promotes. If distance is strictly greater, it's unstoppable.\n            if min_king_dist > dist_to_promo:\n                return True\n    \n    return False",
+      "delta": 0.013749999999999998
+    },
+    {
+      "id": "48f9dbc849d8f447",
+      "name": "rook_behind_passed_pawn",
+      "description": "The side to move has a rook behind its own passed pawn while the opponent has no rook behind their own passed pawn.",
+      "source": "MOTIF_NAME = 'rook_behind_passed_pawn'\nMOTIF_DESCRIPTION = 'The side to move has a rook behind its own passed pawn while the opponent has no rook behind their own passed pawn.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n\n    def has_passed_pawn(color):\n        pawns = board.pieces(chess.PAWN, color)\n        opp_pawns = board.pieces(chess.PAWN, not color)\n        passed = []\n        for sq in pawns:\n            f = chess.square_file(sq)\n            r = chess.square_rank(sq)\n            passed_flag = True\n            for opp_sq in opp_pawns:\n                of = chess.square_file(opp_sq)\n                if abs(of - f) <= 1:\n                    or_ = chess.square_rank(opp_sq)\n                    if (color == chess.WHITE and or_ > r) or (color == chess.BLACK and or_ < r):\n                        passed_flag = False\n                        break\n            if passed_flag:\n                passed.append(sq)\n        return passed\n\n    def rook_behind_own_passed(color):\n        passed = has_passed_pawn(color)\n        rooks = board.pieces(chess.ROOK, color)\n        for rsq in rooks:\n            rf = chess.square_file(rsq)\n            rr = chess.square_rank(rsq)\n            for psq in passed:\n                if chess.square_file(psq) != rf:\n                    continue\n                pr = chess.square_rank(psq)\n                if color == chess.WHITE:\n                    if rr < pr:\n                        return True\n                else:\n                    if rr > pr:\n                        return True\n        return False\n\n    stm_has = rook_behind_own_passed(stm)\n    opp_has = rook_behind_own_passed(opp)\n    return stm_has and not opp_has",
+      "delta": 0.012170000000000004
+    },
+    {
+      "id": "5b5f48cb36e91afb",
+      "name": "piece_attacking_king_defended_target",
+      "description": "The side to move has a piece attacking an opponent piece that is only defended by the opponent king, while the opponent has no such attack, indicating a tactical vulnerability.",
+      "source": "MOTIF_NAME = 'piece_attacking_king_defended_target'\nMOTIF_DESCRIPTION = 'The side to move has a piece attacking an opponent piece that is only defended by the opponent king, while the opponent has no such attack, indicating a tactical vulnerability.'\ndef motif(fen: str) -> bool:\n    import chess\n    board = chess.Board(fen)\n    stm = board.turn\n    opp = not stm\n    \n    opp_king = board.king(opp)\n    if opp_king is None:\n        return False\n    \n    def has_king_only_defended_target(attacking_color, defending_color, def_king):\n        for sq in board.pieces(chess.PAWN, defending_color):\n            attackers = board.attackers(attacking_color, sq)\n            defenders = board.attackers(defending_color, sq)\n            if attackers and len(defenders) == 1 and def_king in defenders:\n                return True\n        for pt in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN):\n            for sq in board.pieces(pt, defending_color):\n                attackers = board.attackers(attacking_color, sq)\n                defenders = board.attackers(defending_color, sq)\n                if attackers and len(defenders) == 1 and def_king in defenders:\n                    return True\n        return False\n    \n    stm_has = has_king_only_defended_target(stm, opp, opp_king)\n    if not stm_has:\n        return False\n    \n    stm_king = board.king(stm)\n    if stm_king is None:\n        return False\n    \n    opp_has = has_king_only_defended_target(opp, stm, stm_king)\n    return not opp_has",
+      "delta": 0.01172999999999999
+    }
+  ],
+  "metadata": {
+    "library_id": "chess/deepseek-v4-pro",
+    "model": "DeepSeek-V4-Pro",
+    "run_id": "basis_api_runs/tokenfactory_chess_bp_direct_max64k_100it_c070_20260719_101413/chess_deepseekv4",
+    "motif_count": 28,
+    "reasoning_profile": "max_64k_total",
+    "successful_iterations": 100,
+    "dataset": {
+      "id": "basis_stm_winning125to250_losing125to250_balanced_exact200k_stockfish18d12_20260625_v1",
+      "sha256": "6bedf361f6189bcbeafab33fc38ab45cde0c5fbfb8a82e04beb8070c4ab972fa",
+      "position_count": 200000,
+      "winning_count": 100000,
+      "losing_count": 100000,
+      "engine": "Stockfish 18",
+      "engine_depth": 12,
+      "winning_cp_stm": [
+        125,
+        250
+      ],
+      "losing_cp_stm": [
+        -250,
+        -125
+      ]
+    },
+    "score_definition": "P(motif=True | winning) - P(motif=True | losing), measured on the discovery training dataset.",
+    "manifest_sha256": "fb98a7e54c4e53a448f7b6024d33b74414b1b5420ec246aa2cb5a91aaef441d8",
+    "archive_model_key": "deepseekv4",
+    "archive_model_name": "DeepSeek-V4-Pro",
+    "source_commit": "456f4b59535d5894689386d00f6ab3b4408ae669",
+    "inventory_sha256": "aa1fe7c64a50cfe588d2985a3e3fb1db90ebb568e9b3b130873b526d77a0586c",
+    "frozen_date": "2026-07-27",
+    "basis_directory": "basis_final",
+    "completion_status": "complete",
+    "archive_erratum": "The archive provenance and gallery contain an incorrect manifest hash. manifest_sha256 records the actual manifest bytes, verified against the frozen input SHA256 ledger.",
+    "motif_provenance": {
+      "5b2e141c88679b6c": {
+        "source_sha256": "5b2e141c88679b6c828430c3e28ecea75bbd43187074066a76b0f98db786714a",
+        "rank": 1,
+        "discovery_index": 13,
+        "winning_true": 36182,
+        "losing_true": 19390,
+        "p_true_winning": 0.36182,
+        "p_true_losing": 0.1939
+      },
+      "ce328cceb0bc2dfc": {
+        "source_sha256": "ce328cceb0bc2dfcdc45a204bf1005680f6c3a11d627f2103cc8705d5c09d4a3",
+        "rank": 2,
+        "discovery_index": 7,
+        "winning_true": 38563,
+        "losing_true": 26375,
+        "p_true_winning": 0.38563,
+        "p_true_losing": 0.26375
+      },
+      "1e9eaaaa85752d2d": {
+        "source_sha256": "1e9eaaaa85752d2d380e1eeb656b8721aa799aa8add965742cb7099d06cda95d",
+        "rank": 3,
+        "discovery_index": 8,
+        "winning_true": 33238,
+        "losing_true": 21223,
+        "p_true_winning": 0.33238,
+        "p_true_losing": 0.21223
+      },
+      "05e4ff6366082a48": {
+        "source_sha256": "05e4ff6366082a4817e799b83bb961f6f1f9c0cc216a1b5cc691ab6d6a23ae5a",
+        "rank": 4,
+        "discovery_index": 3,
+        "winning_true": 36972,
+        "losing_true": 27518,
+        "p_true_winning": 0.36972,
+        "p_true_losing": 0.27518
+      },
+      "3e272857e5a35756": {
+        "source_sha256": "3e272857e5a35756275332bb243a62a82b28441edfef878a5be384066f1f6a89",
+        "rank": 5,
+        "discovery_index": 9,
+        "winning_true": 27617,
+        "losing_true": 20087,
+        "p_true_winning": 0.27617,
+        "p_true_losing": 0.20087
+      },
+      "cc0d4c104ce24cc1": {
+        "source_sha256": "cc0d4c104ce24cc1e62a7bda0d93f2f9b459c52090360e30b8f4e726b966e7fe",
+        "rank": 6,
+        "discovery_index": 18,
+        "winning_true": 38551,
+        "losing_true": 31670,
+        "p_true_winning": 0.38551,
+        "p_true_losing": 0.3167
+      },
+      "690327a464bc7e18": {
+        "source_sha256": "690327a464bc7e18e6b48851a753e84d4155dcc714b777e342b5fd7b2c99edfd",
+        "rank": 7,
+        "discovery_index": 4,
+        "winning_true": 24001,
+        "losing_true": 17250,
+        "p_true_winning": 0.24001,
+        "p_true_losing": 0.1725
+      },
+      "ab46bdf523efaa49": {
+        "source_sha256": "ab46bdf523efaa49a037bd9ebad0d446826fd5f0e43dc2e58d95c1419186fa12",
+        "rank": 8,
+        "discovery_index": 23,
+        "winning_true": 37057,
+        "losing_true": 30377,
+        "p_true_winning": 0.37057,
+        "p_true_losing": 0.30377
+      },
+      "996b3af5232d4010": {
+        "source_sha256": "996b3af5232d401035adfdc37d57ec061c02bdfdf586e96e22d9ff6a737d62ee",
+        "rank": 9,
+        "discovery_index": 26,
+        "winning_true": 20870,
+        "losing_true": 14519,
+        "p_true_winning": 0.2087,
+        "p_true_losing": 0.14519
+      },
+      "d124404b1ab9eada": {
+        "source_sha256": "d124404b1ab9eadaa4bdda27fd1b0a3994a3d420ff5e5a518b381634394c50f6",
+        "rank": 10,
+        "discovery_index": 11,
+        "winning_true": 24846,
+        "losing_true": 19009,
+        "p_true_winning": 0.24846,
+        "p_true_losing": 0.19009
+      },
+      "8fdec2a3d58223ad": {
+        "source_sha256": "8fdec2a3d58223ad153843f21b9a16e8e58c68a4edf42b3f8a6f405b03d37e9d",
+        "rank": 11,
+        "discovery_index": 5,
+        "winning_true": 16826,
+        "losing_true": 11042,
+        "p_true_winning": 0.16826,
+        "p_true_losing": 0.11042
+      },
+      "0a03dea55872419c": {
+        "source_sha256": "0a03dea55872419ccd4a061c463eaa8e1930af8b7140f677f677c7613a46c7a4",
+        "rank": 12,
+        "discovery_index": 14,
+        "winning_true": 24722,
+        "losing_true": 19150,
+        "p_true_winning": 0.24722,
+        "p_true_losing": 0.1915
+      },
+      "f99a7a4bb77030ee": {
+        "source_sha256": "f99a7a4bb77030eefabf236e0839834a7d24fae926eac736d951d63dc926b5d3",
+        "rank": 13,
+        "discovery_index": 12,
+        "winning_true": 25323,
+        "losing_true": 20430,
+        "p_true_winning": 0.25323,
+        "p_true_losing": 0.2043
+      },
+      "a0b6ec3a771cd89f": {
+        "source_sha256": "a0b6ec3a771cd89f592cff52730f7d91f1eb9250c3410ca7ee54b20eece1268d",
+        "rank": 14,
+        "discovery_index": 6,
+        "winning_true": 19335,
+        "losing_true": 15173,
+        "p_true_winning": 0.19335,
+        "p_true_losing": 0.15173
+      },
+      "a80e7d9e0bcbe543": {
+        "source_sha256": "a80e7d9e0bcbe543b61b399f128e0507a22b19a953f2bcf050b29953c128cd26",
+        "rank": 15,
+        "discovery_index": 17,
+        "winning_true": 13774,
+        "losing_true": 9880,
+        "p_true_winning": 0.13774,
+        "p_true_losing": 0.0988
+      },
+      "ef44c31c4aaa4adc": {
+        "source_sha256": "ef44c31c4aaa4adcf59f10e0d8326e016bc740933ead6888bdbd33ce4100c7a0",
+        "rank": 16,
+        "discovery_index": 10,
+        "winning_true": 22695,
+        "losing_true": 19037,
+        "p_true_winning": 0.22695,
+        "p_true_losing": 0.19037
+      },
+      "698525a93a891377": {
+        "source_sha256": "698525a93a8913775dca4c4aac87f973ba0e2618ece55f2c274a1b0f588ed55c",
+        "rank": 17,
+        "discovery_index": 27,
+        "winning_true": 14227,
+        "losing_true": 10630,
+        "p_true_winning": 0.14227,
+        "p_true_losing": 0.1063
+      },
+      "954a09e9c1311116": {
+        "source_sha256": "954a09e9c131111618427bf75889f772b7b8dfb59f32feecbc46266614f9e056",
+        "rank": 18,
+        "discovery_index": 15,
+        "winning_true": 26608,
+        "losing_true": 23051,
+        "p_true_winning": 0.26608,
+        "p_true_losing": 0.23051
+      },
+      "2dab0741cefb00a0": {
+        "source_sha256": "2dab0741cefb00a0b3f7800a74f559f951c91041e69fd18707d33fc2bd776196",
+        "rank": 19,
+        "discovery_index": 22,
+        "winning_true": 5818,
+        "losing_true": 2598,
+        "p_true_winning": 0.05818,
+        "p_true_losing": 0.02598
+      },
+      "9c916e4e61b0028d": {
+        "source_sha256": "9c916e4e61b0028d47d3db02367d90e5e8d491c9f44d4c7c523d81401f7967b0",
+        "rank": 20,
+        "discovery_index": 16,
+        "winning_true": 4986,
+        "losing_true": 2162,
+        "p_true_winning": 0.04986,
+        "p_true_losing": 0.02162
+      },
+      "917bde4ab41ff15a": {
+        "source_sha256": "917bde4ab41ff15acc64ea0a1b1dbc991e11a28d7b90f4d13e7fc54a53730b7d",
+        "rank": 21,
+        "discovery_index": 24,
+        "winning_true": 25463,
+        "losing_true": 22787,
+        "p_true_winning": 0.25463,
+        "p_true_losing": 0.22787
+      },
+      "b9c07244777142dc": {
+        "source_sha256": "b9c07244777142dc6ae258d3e992fcf4733a80a1d058d299c18becb8d3738fe8",
+        "rank": 22,
+        "discovery_index": 2,
+        "winning_true": 17758,
+        "losing_true": 15148,
+        "p_true_winning": 0.17758,
+        "p_true_losing": 0.15148
+      },
+      "4496a25d8a8f7f5e": {
+        "source_sha256": "4496a25d8a8f7f5e6bfa515dfe970b72866ba801535c068929e142ff3de31ab8",
+        "rank": 23,
+        "discovery_index": 1,
+        "winning_true": 11629,
+        "losing_true": 9534,
+        "p_true_winning": 0.11629,
+        "p_true_losing": 0.09534
+      },
+      "8cedd4417eff5b59": {
+        "source_sha256": "8cedd4417eff5b59737bd47208af391fcf78190daf3103f439bf54c4434dc9a8",
+        "rank": 24,
+        "discovery_index": 19,
+        "winning_true": 9414,
+        "losing_true": 7703,
+        "p_true_winning": 0.09414,
+        "p_true_losing": 0.07703
+      },
+      "1744b37be365c2ec": {
+        "source_sha256": "1744b37be365c2ecf09f471c24fe81580845ddfe588188b76f5b8c68d9f75b11",
+        "rank": 25,
+        "discovery_index": 21,
+        "winning_true": 3780,
+        "losing_true": 2181,
+        "p_true_winning": 0.0378,
+        "p_true_losing": 0.02181
+      },
+      "e05646d87822b016": {
+        "source_sha256": "e05646d87822b016b9c98ac61861d4fcf0e7c85e169c7cd4fd49f3acb153bfbc",
+        "rank": 26,
+        "discovery_index": 0,
+        "winning_true": 3349,
+        "losing_true": 1974,
+        "p_true_winning": 0.03349,
+        "p_true_losing": 0.01974
+      },
+      "48f9dbc849d8f447": {
+        "source_sha256": "48f9dbc849d8f447067e1f4ff60302afda7ad1cdad7f7f3c713dd87f01cac94f",
+        "rank": 27,
+        "discovery_index": 20,
+        "winning_true": 3622,
+        "losing_true": 2405,
+        "p_true_winning": 0.03622,
+        "p_true_losing": 0.02405
+      },
+      "5b5f48cb36e91afb": {
+        "source_sha256": "5b5f48cb36e91afb54995983f15132d681453353fd5a70102ec4755ab31166fb",
+        "rank": 28,
+        "discovery_index": 25,
+        "winning_true": 9766,
+        "losing_true": 8593,
+        "p_true_winning": 0.09766,
+        "p_true_losing": 0.08593
+      }
+    }
+  }
+}
