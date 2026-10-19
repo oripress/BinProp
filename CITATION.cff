@@ -18,4 +18,9 @@ preferred-citation:
     - family-names: Golubev
       given-names: Alexander
   year: 2026
-  notes: "Preprint"
+  url: "https://arxiv.org/abs/2610.23166"
+  date-published: 2026-10-16
+  identifiers:
+    - type: other
+      value: "arXiv:2610.23166"
+      description: "arXiv preprint"

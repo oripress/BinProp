@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://explainthatmove.com/paper">Paper</a>
+  <a href="https://arxiv.org/abs/2610.23166">Paper</a>
   &nbsp;·&nbsp;
   <a href="https://explainthatmove.com">Website</a>
   &nbsp;·&nbsp;
@@ -103,11 +103,14 @@ the code checks are not a security sandbox.
 ## BibTeX
 
 ```bibtex
-@misc{press2026binprop,
-  title  = {{Explaining Chess and Go in Natural Language}},
-  author = {Ori Press and Alexander Golubev},
-  year   = {2026},
-  note   = {Preprint}
+@misc{press2026explaining,
+  title         = {{Explaining Chess and Go in Natural Language}},
+  author        = {Ori Press and Alexander Golubev},
+  year          = {2026},
+  eprint        = {2610.23166},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CL},
+  url           = {https://arxiv.org/abs/2610.23166}
 }
 ```
 
