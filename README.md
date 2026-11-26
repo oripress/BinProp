@@ -1,4 +1,4 @@
-<h1 align="center">Explaining Chess and Go in Natural Language</h1>
+<h1 align="center">Explaining Chess and Go with Discovered Motifs</h1>
 
 <p align="center">
   <a href="https://oripress.com">Ori Press</a>
@@ -103,8 +103,8 @@ the code checks are not a security sandbox.
 ## BibTeX
 
 ```bibtex
-@misc{press2026explaining,
-  title         = {{Explaining Chess and Go in Natural Language}},
+@misc{press2026explainingchessdiscoveredmotifs,
+  title         = {{Explaining Chess and Go with Discovered Motifs}},
   author        = {Ori Press and Alexander Golubev},
   year          = {2026},
   eprint        = {2610.23166},
