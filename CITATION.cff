@@ -11,7 +11,7 @@ version: 0.1.0
 license: MIT
 preferred-citation:
   type: generic
-  title: "Explaining Chess and Go in Natural Language"
+  title: "Explaining Chess and Go with Discovered Motifs"
   authors:
     - family-names: Press
       given-names: Ori
@@ -19,7 +19,7 @@ preferred-citation:
       given-names: Alexander
   year: 2026
   url: "https://arxiv.org/abs/2610.23166"
-  date-published: 2026-10-16
+  date-published: 2026-11-25
   identifiers:
     - type: other
       value: "arXiv:2610.23166"
