@@ -20,7 +20,7 @@ Pass a library ID or JSON file to `infer --library`. See the
 
 ## Scores and provenance
 
-Motifs are ordered by [discovery delta](method.md#discovery), not held-out explainability.
+Motifs are ordered by [discovery delta](method.md#discovery), not held-out motif generalization.
 
 All eight libraries come from 100-iteration runs on the same discovery positions
 with the `max_64k_total` reasoning profile. The Kimi library is from the completed
